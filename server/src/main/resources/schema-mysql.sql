@@ -24,8 +24,14 @@ create table if not exists teacher_profile (
 );
 create table if not exists administrative_class (
   id bigint not null auto_increment primary key,
-  name varchar(120) not null, grade_year varchar(20) not null, major_name varchar(120), enabled boolean not null default true
+  name varchar(120) not null, grade_year varchar(20) not null,
+  college_name varchar(120), college_code varchar(2), major_name varchar(120), major_code varchar(2), class_code varchar(2),
+  enabled boolean not null default true
 );
+alter table administrative_class add column if not exists college_name varchar(120);
+alter table administrative_class add column if not exists college_code varchar(2);
+alter table administrative_class add column if not exists major_code varchar(2);
+alter table administrative_class add column if not exists class_code varchar(2);
 create table if not exists student_profile (
   user_id bigint primary key, student_no varchar(40) not null unique, grade_year varchar(20), administrative_class_id bigint,
   constraint fk_mysql_student_profile_user foreign key (user_id) references user_account(id) on delete cascade,
