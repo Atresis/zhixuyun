@@ -1,0 +1,16 @@
+{
+  "name": "zhixuyun",
+  "description": "知序云前后端分离项目的本地开发工具和只读代码索引 MCP。",
+  "version": "0.1.0",
+  "author": { "name": "知序云项目组" },
+  "interface": {
+    "displayName": "知序云项目工具",
+    "shortDescription": "知序云项目的只读代码索引 MCP",
+    "longDescription": "提供仓库结构、文件树、符号、文本搜索、引用和影响范围分析。",
+    "developerName": "知序云项目组",
+    "category": "Developer Tools",
+    "defaultPrompt": "使用 jCodeMunch 只读分析知序云项目。",
+    "capabilities": ["repository indexing", "symbol search", "reference analysis"]
+  },
+  "mcpServers": "./.mcp.json"
+}

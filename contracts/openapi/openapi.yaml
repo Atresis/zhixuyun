@@ -1,0 +1,666 @@
+openapi: 3.0.3
+info:
+  title: 知序云 API
+  version: 0.1.0
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        '200':
+          description: 服务健康
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Account disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+  /auth/logout:
+    post:
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Session revoked
+  /auth/me:
+    get:
+      operationId: currentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current authenticated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserResponse'
+        '401':
+          description: Missing, invalid or expired session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+        '403':
+          description: Account disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthError'
+  /auth/profile:
+    get:
+      operationId: getProfile
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Current profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+    patch:
+      operationId: updateProfile
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileResponse'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+  /auth/profile/avatar:
+    get:
+      operationId: getAvatar
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Avatar binary
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+    post:
+      operationId: uploadAvatar
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 支持 UTF-8 编码的 .txt、.md 文件及 .docx 文件
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+    delete:
+      operationId: deleteAvatar
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Password changed
+  /teacher/workspace:
+    get:
+      operationId: getTeacherWorkspace
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 当前教师完整工作台数据
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TeacherWorkspace' }
+        '403': { description: 需要教师角色 }
+  /teacher/profile:
+    patch:
+      operationId: updateTeacherProfile
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: 已更新教师资料 }
+  /teacher/courses/{courseId}/resources:
+    post:
+      operationId: uploadTeacherResource
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: courseId, in: path, required: true, schema: { type: integer, format: int64 } }
+        - { name: kind, in: query, schema: { type: string, enum: [QUESTION_BANK, COURSE, MATERIAL] } }
+        - { name: shared, in: query, schema: { type: boolean, default: false } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties: { file: { type: string, format: binary } }
+      responses:
+        '200': { description: 已上传资料 }
+  /teacher/resources/{resourceId}/download:
+    get:
+      operationId: downloadTeacherResource
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: resourceId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200':
+          description: 资料文件
+          content: { application/octet-stream: { schema: { type: string, format: binary } } }
+  /teacher/resources/question-bank-template:
+    get:
+      operationId: downloadQuestionBankTemplate
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 题库导入模板
+          content: { text/csv: { schema: { type: string, format: binary } } }
+  /teacher/resources/{resourceId}:
+    delete:
+      operationId: deleteTeacherResource
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: resourceId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '204': { description: 已删除本人上传资料 }
+  /teacher/courses/{courseId}/tasks:
+    post:
+      operationId: createTeacherTask
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: courseId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TeacherTaskInput' } } }
+      responses:
+        '200': { description: 已创建作业或实验 }
+  /teacher/tasks/{taskId}:
+    patch:
+      operationId: updateTeacherTask
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TeacherTaskInput' } } }
+      responses:
+        '200': { description: 已更新任务信息 }
+  /teacher/tasks/{taskId}/questions:
+    put:
+      operationId: replaceTeacherTaskQuestions
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: array, items: { $ref: '#/components/schemas/Question' } }
+      responses:
+        '200': { description: 已保存作业题目 }
+  /teacher/submissions/{submissionId}/grade:
+    put:
+      operationId: gradeTeacherSubmission
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: submissionId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teacherScore]
+              properties:
+                teacherScore: { type: integer, minimum: 0 }
+                teacherComment: { type: string }
+      responses:
+        '200': { description: 已保存教师批改 }
+  /teacher/alerts/{alertId}/read:
+    patch:
+      operationId: readTeachingAlert
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: alertId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: 预警已读 }
+  /teacher/alerts/{alertId}/proposal:
+    put:
+      operationId: saveTeachingAlertProposal
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: alertId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proposal]
+              properties: { proposal: { type: string, minLength: 1 } }
+      responses:
+        '200': { description: 已保存解决方案，状态变为已提案 }
+  /teacher/assistant/sessions:
+    post:
+      operationId: createTeacherAssistantSession
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 已创建当前教师私有对话 }
+  /teacher/assistant/sessions/{sessionId}/messages:
+    post:
+      operationId: sendTeacherAssistantMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties: { content: { type: string, minLength: 1 } }
+      responses:
+        '200': { description: 当前账号对话及助手回复 }
+        '503': { description: 未配置模型 API Key }
+  /teacher/conversations/{conversationId}/read:
+    patch:
+      operationId: readTeacherConversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: conversationId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: 会话已读 }
+  /teacher/conversations/{conversationId}/messages:
+    post:
+      operationId: sendTeacherConversationMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: conversationId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties: { content: { type: string, minLength: 1 } }
+      responses:
+        '200': { description: 已发送消息；系统通知会话拒绝写入 }
+  /teacher/contact-candidates:
+    get:
+      operationId: getTeacherContactCandidates
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: courseId, in: query, required: true, schema: { type: integer, format: int64 } }
+        - { name: q, in: query, required: false, schema: { type: string } }
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: size, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200': { description: 当前任课班级的学生分页列表 }
+        '404': { description: 课程不属于当前教师 }
+  /teacher/conversations:
+    post:
+      operationId: createTeacherConversation
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [studentId, content]
+              properties:
+                studentId: { type: integer, format: int64 }
+                content: { type: string, minLength: 1 }
+      responses:
+        '200': { description: 首条消息发送成功后创建的学生会话 }
+        '404': { description: 学生不属于当前教师任课班级 }
+  /student/workspace:
+    get:
+      operationId: getStudentWorkspace
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 当前学生完整工作台数据
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentWorkspace' }
+        '403': { description: 需要学生角色 }
+  /student/tasks/{taskId}/text-submission:
+    post:
+      operationId: submitStudentText
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: 提交后返回最新学生工作台
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentWorkspace' }
+  /student/tasks/{taskId}/file-submission:
+    post:
+      operationId: submitStudentFile
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: 提交后返回最新学生工作台
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StudentWorkspace' }
+  /student/assistant/ask:
+    post:
+      operationId: askStudentAssistant
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: 学生助手回复
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  answer: { type: string }
+        '503': { description: 未配置模型 API Key }
+  /admin/dashboard:
+    get:
+      operationId: getAdminDashboard
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 管理员首页统计与系统状态 }
+        '403': { description: 需要管理员角色 }
+  /admin/users:
+    get:
+      operationId: searchAdminUsers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 10 } }
+        - { name: keyword, in: query, schema: { type: string } }
+        - { name: role, in: query, schema: { type: string, enum: [STUDENT, TEACHER, ADMIN] } }
+      responses:
+        '200': { description: 管理员账号分页查询 }
+    post:
+      operationId: createAdminUser
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: 创建账号 }
+  /admin/users/{userId}:
+    patch:
+      operationId: updateAdminUser
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: userId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: 更新账号资料 }
+  /admin/users/{userId}/status:
+    patch:
+      operationId: setAdminUserStatus
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: userId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: 更新账号启用状态 }
+  /admin/users/{userId}/password:
+    patch:
+      operationId: resetAdminUserPassword
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: userId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '204': { description: 重置账号密码 }
+  /admin/courses:
+    get:
+      operationId: listAdminCourses
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 管理员课程目录 }
+    post:
+      operationId: createAdminCourse
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: 创建课程 }
+  /admin/courses/{courseId}/classes:
+    get:
+      operationId: listAdminCourseClasses
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: courseId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: 查询课程教学班 }
+    post:
+      operationId: createAdminCourseClass
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: courseId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: 创建教学班 }
+  /admin/administrative-classes:
+    get:
+      operationId: listAdministrativeClasses
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 行政班目录 }
+    post:
+      operationId: createAdministrativeClass
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: 创建行政班 }
+  /admin/settings:
+    get:
+      operationId: getAdminSettings
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 管理员可见平台设置 }
+    put:
+      operationId: updateAdminSettings
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: true } } }
+      responses:
+        '200': { description: 保存平台设置 }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, service, timestamp]
+      properties:
+        status: { type: string }
+        service: { type: string }
+        timestamp: { type: string, format: date-time }
+    LoginRequest:
+      type: object
+      required: [account, password]
+      properties:
+        account: { type: string, minLength: 1 }
+        password: { type: string, minLength: 1, format: password }
+    LoginResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token: { type: string }
+        user:
+          $ref: '#/components/schemas/CurrentUserResponse'
+    CurrentUserResponse:
+      type: object
+      required: [id, loginName, displayName, role, enabled]
+      properties:
+        id: { type: integer, format: int64 }
+        loginName: { type: string }
+        displayName: { type: string }
+        role: { type: string, enum: [STUDENT, TEACHER, ADMIN] }
+        enabled: { type: boolean }
+    ProfileResponse:
+      type: object
+      required: [id, loginName, displayName, email, phone, bio, role, enabled, mustChangePassword, hasAvatar]
+      properties:
+        id: { type: integer, format: int64 }
+        loginName: { type: string }
+        displayName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        bio: { type: string }
+        role: { type: string, enum: [STUDENT, TEACHER, ADMIN] }
+        enabled: { type: boolean }
+        mustChangePassword: { type: boolean }
+        hasAvatar: { type: boolean }
+    ChangePasswordRequest:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword: { type: string, format: password }
+        newPassword: { type: string, format: password }
+    AuthError:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+    TeacherWorkspace:
+      type: object
+      required: [profile, metrics, semesters, courses, alerts, assistantSessions, conversations, recommendations]
+      properties:
+        profile: { type: object, additionalProperties: true }
+        metrics: { type: object, additionalProperties: true }
+        semesters: { type: array, items: { type: string } }
+        courses: { type: array, items: { type: object, additionalProperties: true } }
+        alerts: { type: array, items: { type: object, additionalProperties: true } }
+        assistantSessions: { type: array, items: { type: object, additionalProperties: true } }
+        conversations: { type: array, items: { type: object, additionalProperties: true } }
+        recommendations: { type: array, items: { type: string } }
+    StudentWorkspace:
+      type: object
+      required: [profile, metrics, courses, tasks, reports, notifications, assistantPrompts]
+      properties:
+        profile: { type: object, additionalProperties: true }
+        metrics: { type: object, additionalProperties: true }
+        courses: { type: array, items: { type: object, additionalProperties: true } }
+        tasks: { type: array, items: { type: object, additionalProperties: true } }
+        reports: { type: array, items: { type: object, additionalProperties: true } }
+        notifications: { type: array, items: { type: object, additionalProperties: true } }
+        assistantPrompts: { type: array, items: { type: string } }
+    TeacherTaskInput:
+      type: object
+      properties:
+        taskType: { type: string, enum: [HOMEWORK, EXPERIMENT] }
+        name: { type: string }
+        description: { type: string }
+        startAt: { type: string, format: date-time }
+        deadline: { type: string, format: date-time }
+        maxScore: { type: integer, minimum: 1 }
+        questions: { type: array, items: { $ref: '#/components/schemas/Question' } }
+    Question:
+      type: object
+      required: [id, type, title, options, answer, score]
+      properties:
+        id: { type: integer, format: int64 }
+        type: { type: string, enum: [SINGLE, MULTIPLE, TRUE_FALSE, FILL, SHORT] }
+        title: { type: string }
+        options: { type: array, items: { type: string } }
+        answer: { type: string }
+        score: { type: integer, minimum: 0 }

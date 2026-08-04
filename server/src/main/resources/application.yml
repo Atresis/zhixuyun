@@ -1,0 +1,41 @@
+server:
+  port: ${SERVER_PORT:8080}
+spring:
+  application:
+    name: zhixuyun-server
+  datasource:
+    url: ${DATABASE_URL:jdbc:h2:file:./.local/zhixuyun;MODE=PostgreSQL;AUTO_SERVER=TRUE;DATABASE_TO_LOWER=TRUE}
+    username: ${DATABASE_USERNAME:sa}
+    password: ${DATABASE_PASSWORD:}
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 24MB
+zhixuyun:
+  ai:
+    api-key: ${ZHIXUYUN_AI_API_KEY:}
+    base-url: ${ZHIXUYUN_AI_BASE_URL:https://api.moonshot.cn/v1}
+    model: ${ZHIXUYUN_AI_MODEL:kimi-k2.6}
+    timeout: ${ZHIXUYUN_AI_TIMEOUT:180s}
+    temperature: ${ZHIXUYUN_AI_TEMPERATURE:1}
+    max-tokens: ${ZHIXUYUN_AI_MAX_TOKENS:4096}
+    max-submission-characters: ${ZHIXUYUN_AI_MAX_SUBMISSION_CHARACTERS:30000}
+  auth:
+    session-ttl: 12h
+  resource-storage:
+    base-dir: ${ZHIXUYUN_RESOURCE_STORAGE_BASE_DIR:./.local/resource-files}
+  backup:
+    datasource:
+      url: ${BACKUP_DATABASE_URL:jdbc:h2:file:./.local/zhixuyun-backup;MODE=PostgreSQL;AUTO_SERVER=TRUE;DATABASE_TO_LOWER=TRUE}
+      username: ${BACKUP_DATABASE_USERNAME:sa}
+      password: ${BACKUP_DATABASE_PASSWORD:}
+      driver-class-name: ${BACKUP_DATABASE_DRIVER_CLASS_NAME:org.h2.Driver}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

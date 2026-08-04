@@ -1,0 +1,20 @@
+spring:
+  config:
+    activate:
+      on-profile: mysql
+  datasource:
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/zhixuyun?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${DATABASE_USERNAME:zhixuyun}
+    password: ${DATABASE_PASSWORD:change-me}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-mysql.sql
+zhixuyun:
+  backup:
+    datasource:
+      url: ${BACKUP_DATABASE_URL:jdbc:mysql://localhost:3306/zhixuyun_backup?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+      username: ${BACKUP_DATABASE_USERNAME:zhixuyun}
+      password: ${BACKUP_DATABASE_PASSWORD:change-me}
+      driver-class-name: com.mysql.cj.jdbc.Driver

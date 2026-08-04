@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+target/
+.local/
+*.mv.db
+*.trace.db
+.idea/
+__pycache__/
+.pytest_cache/

@@ -1,0 +1,44 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import { Download, Search, Sparkles } from "@lucide/vue";
+import AdminModal from "./AdminModal.vue";
+import { useAdminStore } from "./admin.store";
+import type { AdministrativeClass } from "./admin.api";
+
+const store = useAdminStore(); const modal = ref<"create" | "edit" | null>(null); const editing = ref<AdministrativeClass | null>(null); const keyword = ref(""); const grade = ref(""); const selectedCourseIds = ref<number[]>([]); const saving = ref(false); const message = ref("");
+const form = reactive({ name: "", gradeYear: "2026", majorName: "软件工程", college: "软件学院", classNumber: 1, enabled: true });
+const rows = computed(() => store.classes.filter((item) => (!keyword.value || `${item.name} ${item.majorName || ""}`.includes(keyword.value)) && (!grade.value || item.gradeYear === grade.value)));
+const grades = computed(() => [...new Set(store.classes.map((item) => item.gradeYear))].sort());
+const studentCount = (id: number) => store.users.filter((item) => item.administrativeClassId === id).length;
+const courseCount = (item: AdministrativeClass) => store.courses.filter((course) => course.classes.some((entry) => entry.name === item.name)).length;
+onMounted(() => Promise.all([store.loadClasses(), store.loadUsers({ role: "STUDENT" }), store.loadCourses()]));
+function generatedName() { return `${form.gradeYear}级${form.majorName}${form.classNumber}班`; }
+function openCreate() { editing.value = null; Object.assign(form, { name: "", gradeYear: "2026", majorName: "软件工程", college: "软件学院", classNumber: 1, enabled: true }); selectedCourseIds.value = store.courses.slice(0, 3).map((item) => item.id); message.value = ""; modal.value = "create"; }
+function openEdit(item: AdministrativeClass) { editing.value = item; const numberMatch = item.name.match(/(\d+)班$/); Object.assign(form, { name: item.name, gradeYear: item.gradeYear, majorName: item.majorName || "软件工程", college: "软件学院", classNumber: Number(numberMatch?.[1] || 1), enabled: item.enabled }); selectedCourseIds.value = store.courses.filter((course) => course.classes.some((entry) => entry.name === item.name)).map((course) => course.id); message.value = ""; modal.value = "edit"; }
+async function syncCourses(className: string, previousName = className) {
+  const selected = new Set(selectedCourseIds.value);
+  for (const course of store.courses) {
+    const linked = course.classes.find((item) => item.name === className || item.name === previousName);
+    if (selected.has(course.id) && !linked) await store.createCourseClass(course.id, { name: className, term: course.semester, enabled: true, teacherId: null });
+    if (selected.has(course.id) && linked && linked.name !== className) await store.updateTeachingClass(linked.id, { name: className, term: linked.term, enabled: linked.enabled, teacherId: linked.teacherId ?? null });
+    if (!selected.has(course.id) && linked) await store.deleteTeachingClass(linked.id);
+  }
+}
+async function save() { saving.value = true; message.value = ""; try { const name = generatedName(); const previousName = editing.value?.name || name; if (modal.value === "create") await store.createAdministrativeClass({ name, gradeYear: form.gradeYear, majorName: form.majorName, enabled: form.enabled }); else if (editing.value) await store.updateAdministrativeClass(editing.value.id, { name, gradeYear: form.gradeYear, majorName: form.majorName, enabled: form.enabled }); await syncCourses(name, previousName); modal.value = null; } catch (error) { message.value = (error as Error).message; } finally { saving.value = false; } }
+async function remove(item: AdministrativeClass) { if (confirm(`确认删除班级“${item.name}”吗？存在学生关联时系统会阻止删除。`)) { try { await store.deleteAdministrativeClass(item.id); } catch (error) { message.value = (error as Error).message; } } }
+function exportRows() { const csv = [["班级名称", "年级", "专业", "学生人数", "已配置课程"], ...rows.value.map((item) => [item.name, item.gradeYear, item.majorName || "", studentCount(item.id), courseCount(item)])].map((row) => row.join(",")).join("\r\n"); const url = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" })); const a = document.createElement("a"); a.href = url; a.download = "班级清单.csv"; a.click(); URL.revokeObjectURL(url); }
+</script>
+
+<template>
+  <section class="admin-page">
+    <div class="admin-page-head"><div><h1>班级管理</h1><p>维护行政班信息，并为班级配置当前培养方案中的课程。</p></div><div class="admin-head-actions"><button class="admin-secondary-button" @click="exportRows"><Download :size="16" />导出班级清单</button><button class="admin-primary-button" @click="openCreate">＋ 新增班级</button></div></div>
+    <div class="admin-toolbar admin-panel"><select v-model="grade" class="admin-filter"><option value="">全部年级</option><option v-for="item in grades" :key="item" :value="item">{{ item }}级</option></select><select class="admin-filter"><option>全部学院</option></select><select class="admin-filter"><option>全部专业</option></select><label class="admin-search"><Search :size="16" /><input v-model="keyword" placeholder="班级名称或编号" /></label><span class="admin-toolbar-count">共 {{ rows.length }} 个班级</span></div>
+    <section class="admin-panel admin-table-wrap"><div class="admin-table-scroll"><table class="admin-data-table admin-class-directory"><thead><tr><th>班级名称</th><th>所属学院</th><th>专业</th><th>学生人数</th><th>已配置课程</th><th>操作</th></tr></thead><tbody><tr v-for="item in rows" :key="item.id"><td><span class="admin-cell-main"><strong>{{ item.name }}</strong><small>班级编号 {{ item.gradeYear }}-{{ item.id.toString().padStart(2, '0') }}</small></span></td><td>软件学院</td><td>{{ item.majorName || "未填写" }}</td><td>{{ studentCount(item.id) }} 人</td><td>{{ courseCount(item) }} 门</td><td><div class="admin-row-actions"><button class="admin-row-action danger" @click="remove(item)">删除班级</button><button class="admin-row-action" @click="openEdit(item)">编辑信息</button></div></td></tr></tbody></table></div><div v-if="!rows.length" class="admin-empty">暂无班级数据</div><footer class="admin-table-footer"><span>第 1-{{ rows.length }} 条，共 {{ rows.length }} 条</span><nav class="admin-pagination"><button>‹</button><button class="active">1</button><button>›</button></nav></footer></section>
+    <AdminModal v-if="modal" :title="modal === 'create' ? '新增班级' : '编辑班级信息'" :subtitle="modal === 'create' ? '班级名称由年级、专业和班级编号自动生成' : `${editing?.name} · ${editing?.gradeYear}`" wide @close="modal = null">
+      <form id="class-form" @submit.prevent="save"><div class="admin-form-grid"><label class="admin-field"><span>所属学院</span><select v-model="form.college"><option>软件学院</option><option>电子与通信工程学院</option><option>创意设计学院</option></select></label><label class="admin-field"><span>专业</span><input v-model="form.majorName" required /></label><label class="admin-field"><span>年级</span><select v-model="form.gradeYear"><option>2023</option><option>2024</option><option>2025</option><option>2026</option></select></label><label class="admin-field"><span>班级编号</span><input v-model.number="form.classNumber" type="number" min="1" required /></label></div>
+        <div v-if="modal === 'create'" class="admin-info-strip admin-generated-name"><Sparkles :size="16" />生成名称：{{ generatedName() }}，系统编号：SE-{{ form.gradeYear }}-{{ String(form.classNumber).padStart(2, '0') }}。</div>
+        <div class="admin-course-select-head"><h3>{{ modal === "create" ? "首学期课程" : "班级课程" }}</h3><select class="admin-filter"><option>{{ modal === "create" ? "2026至2027学院第1学期" : "2025至2026学院第2学期" }}</option></select></div><div class="admin-course-picker-tools"><select class="admin-filter"><option>{{ modal === "create" ? "优先显示本学期课程" : "优先显示本专业课程" }}</option></select><select class="admin-filter"><option>全部课程类型</option></select><label class="admin-search"><Search :size="16" /><input placeholder="搜索课程名称或编码" /></label><span>已选 {{ selectedCourseIds.length }} 门</span></div><div class="admin-course-check-grid"><label v-for="course in store.courses.slice(0, 8)" :key="course.id"><input v-model="selectedCourseIds" type="checkbox" :value="course.id" /><span class="admin-cell-main"><strong>{{ course.name }}</strong><small>{{ course.code }} · {{ course.className.split(' · ')[1] || '专业必修' }}</small></span></label></div></form><p v-if="message" class="admin-form-error">{{ message }}</p>
+      <template #footer><span v-if="modal === 'create'" class="admin-status">班级编号可用</span><span v-else class="admin-dialog-counter">当前选择 {{ selectedCourseIds.length }} 门课程</span><button class="admin-secondary-button" @click="modal = null">取消</button><button class="admin-primary-button" form="class-form" :disabled="saving">{{ modal === "create" ? "创建班级" : "保存班级信息" }}</button></template>
+    </AdminModal>
+  </section>
+</template>

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "jcodemunch": {
+      "command": "python",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/jcodemunch_server.py"],
+      "env": { "JCODEMUNCH_ROOT": "${CLAUDE_PROJECT_DIR}" }
+    }
+  }
+}
