@@ -355,6 +355,33 @@
   padding: 20px 0;
 }
 
+.student-join-course,
+.student-join-course form,
+.student-join-course label,
+.student-course-card,
+.student-version-list article {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.student-join-course { justify-content: space-between; flex-wrap: wrap; }
+.student-join-course form { flex-wrap: wrap; }
+.student-join-course label { min-height: 38px; padding: 0 12px; border: 1px solid rgba(17, 48, 79, 0.15); border-radius: 8px; }
+.student-join-course input { border: 0; outline: 0; background: transparent; }
+.student-primary-button, .student-secondary-button { min-height: 36px; padding: 0 14px; border: 1px solid #1e72d8; border-radius: 7px; cursor: pointer; }
+.student-primary-button { color: #fff; background: #1e72d8; }
+.student-secondary-button { margin-top: 10px; color: #1e5fa8; background: #fff; }
+.student-course-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.student-course-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 7px; color: #fff; flex: 0 0 auto; }
+.student-course-card p { margin: 5px 0; }
+.student-course-card span { color: #69809a; }
+.student-inline-message { color: #1e5fa8; }
+.student-notice.unread { border-left: 3px solid #1e72d8; }
+.student-version-list { display: grid; gap: 8px; margin-top: 10px; }
+.student-version-list article { align-items: flex-start; padding: 10px; border: 1px solid rgba(17, 48, 79, 0.1); border-radius: 7px; }
+.student-version-list article span { color: #69809a; }
+
 .student-submit-error {
   padding: 12px 14px;
   border-radius: 14px;

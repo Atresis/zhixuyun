@@ -6,6 +6,7 @@ import cloud.zhixuyun.auth.AuthException;
 import cloud.zhixuyun.auth.AuthSessionService;
 import cloud.zhixuyun.auth.Role;
 import cloud.zhixuyun.auth.UserAccount;
+import cloud.zhixuyun.workflow.LearningWorkflowService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
@@ -32,15 +33,17 @@ public class StudentService {
     private final AiAssistantClient ai;
     private final AiGradingService grading;
     private final SubmissionTextExtractor textExtractor;
+    private final LearningWorkflowService workflow;
 
     public StudentService(JdbcTemplate jdbc, AuthSessionService sessions, ObjectMapper json, AiAssistantClient ai,
-                          AiGradingService grading, SubmissionTextExtractor textExtractor) {
+                          AiGradingService grading, SubmissionTextExtractor textExtractor, LearningWorkflowService workflow) {
         this.jdbc = jdbc;
         this.sessions = sessions;
         this.json = json;
         this.ai = ai;
         this.grading = grading;
         this.textExtractor = textExtractor;
+        this.workflow = workflow;
     }
 
     public UserAccount requireStudent(String authorization) {
@@ -55,7 +58,7 @@ public class StudentService {
         Map<String, Object> profile = profile(student);
         String studentNo = String.valueOf(profile.get("studentNo"));
         String className = String.valueOf(profile.get("className"));
-        List<Map<String, Object>> courses = courses(className);
+        List<Map<String, Object>> courses = courses(student.getId(), className);
         List<Map<String, Object>> tasks = tasks(studentNo, courses);
         List<Map<String, Object>> reports = reports(tasks);
         Map<String, Object> result = new LinkedHashMap<>();
@@ -64,7 +67,7 @@ public class StudentService {
         result.put("courses", courses);
         result.put("tasks", tasks);
         result.put("reports", reports);
-        result.put("notifications", notifications(tasks));
+        result.put("notifications", notifications(student, tasks));
         result.put("assistantPrompts", List.of(
                 "帮我总结待完成实验任务",
                 "根据 AI 初评给我一份修改建议",
@@ -106,7 +109,7 @@ public class StudentService {
         if (content == null || content.isBlank()) throw badRequest("AI 问题不能为空");
         Map<String, Object> profile = profile(student);
         String studentNo = String.valueOf(profile.get("studentNo"));
-        List<Map<String, Object>> tasks = tasks(studentNo, courses(String.valueOf(profile.get("className"))));
+        List<Map<String, Object>> tasks = tasks(studentNo, courses(student.getId(), String.valueOf(profile.get("className"))));
         String context = writeJson(Map.of("profile", profile, "tasks", tasks));
         String system = "你是知序云的学生学习助手。只基于提供的学生课程和任务数据回答，不要编造成绩、截止时间或政策。给出具体、可执行的学习建议；无法从数据确定时明确说明。回答使用简洁中文。当前学生数据：" + context;
         return Map.of("answer", ai.complete(system, List.of(Map.of("role", "user", "content", content.trim()))));
@@ -116,7 +119,7 @@ public class StudentService {
         if (content == null || content.isBlank()) throw badRequest("请输入问题内容");
         Map<String, Object> profile = profile(student);
         String studentNo = String.valueOf(profile.get("studentNo"));
-        List<Map<String, Object>> tasks = tasks(studentNo, courses(String.valueOf(profile.get("className"))));
+        List<Map<String, Object>> tasks = tasks(studentNo, courses(student.getId(), String.valueOf(profile.get("className"))));
         long pending = tasks.stream().filter(task -> "待提交".equals(task.get("submissionStatus"))).count();
         long reviewed = tasks.stream().filter(task -> "教师已复核".equals(task.get("submissionStatus"))).count();
         String prompt = content.trim();
@@ -153,12 +156,13 @@ public class StudentService {
         }, student.getId());
     }
 
-    private List<Map<String, Object>> courses(String className) {
+    private List<Map<String, Object>> courses(long studentId, String className) {
         return jdbc.query("""
-                select c.id,c.name,c.code,c.class_name,c.semester,c.schedule_text,c.color,u.display_name teacher_name
+                select distinct c.id,c.name,c.code,c.class_name,c.semester,c.schedule_text,c.color,u.display_name teacher_name
                 from course c
                 join user_account u on u.id=c.teacher_id
-                where c.class_name=?
+                left join course_enrollment ce on ce.course_id=c.id and ce.student_id=? and ce.active=true
+                where c.class_name=? or ce.id is not null
                 order by c.id
                 """, (rs, row) -> {
             Map<String, Object> value = new LinkedHashMap<>();
@@ -171,7 +175,7 @@ public class StudentService {
             value.put("teacherName", rs.getString("teacher_name"));
             value.put("color", rs.getString("color"));
             return value;
-        }, className);
+        }, studentId, className);
     }
 
     private List<Map<String, Object>> tasks(String studentNo, List<Map<String, Object>> courses) {
@@ -180,7 +184,8 @@ public class StudentService {
             long courseId = ((Number) course.get("id")).longValue();
             tasks.addAll(jdbc.query("""
                     select t.id,t.course_id,t.task_type,t.name,t.description,t.start_at,t.deadline,t.max_score,
-                           s.id submission_id,s.submitted_at,s.ai_score,s.teacher_score,s.ai_review,s.teacher_comment,s.report_text,s.answers_json
+                           s.id submission_id,s.submitted_at,s.ai_score,s.teacher_score,s.ai_review,s.teacher_comment,s.report_text,s.answers_json,
+                           s.review_status,s.current_version_no
                     from learning_task t
                     left join task_submission s on s.task_id=t.id and (s.student_no=? or replace(s.student_no,'20230','2023')=?)
                     where t.course_id=?
@@ -206,9 +211,11 @@ public class StudentService {
         value.put("teacherScore", (Integer) rs.getObject("teacher_score"));
         value.put("aiReview", rs.getString("ai_review"));
         value.put("teacherComment", rs.getString("teacher_comment"));
+        value.put("reviewStatus", rs.getString("review_status"));
+        value.put("currentVersionNo", rs.getInt("current_version_no"));
         value.put("reportText", rs.getString("report_text"));
         value.put("attachment", readJsonObject(rs.getString("answers_json")));
-        value.put("submissionStatus", statusOf(rs.getObject("submission_id") != null, rs.getObject("teacher_score"), rs.getString("ai_review")));
+        value.put("submissionStatus", statusOf(rs.getObject("submission_id") != null, rs.getObject("teacher_score"), rs.getString("ai_review"), rs.getString("review_status")));
         return value;
     }
 
@@ -225,6 +232,8 @@ public class StudentService {
             value.put("teacherScore", task.get("teacherScore"));
             value.put("aiReview", task.get("aiReview"));
             value.put("teacherComment", task.get("teacherComment"));
+            value.put("reviewStatus", task.get("reviewStatus"));
+            value.put("currentVersionNo", task.get("currentVersionNo"));
             value.put("reportText", task.get("reportText"));
             value.put("attachment", task.get("attachment"));
             return value;
@@ -239,8 +248,9 @@ public class StudentService {
         return Map.of("pendingTaskCount", pending, "submittedCount", submitted, "aiReadyCount", aiReady, "reviewedCount", reviewed);
     }
 
-    private List<Map<String, Object>> notifications(List<Map<String, Object>> tasks) {
-        List<Map<String, Object>> notices = new ArrayList<>();
+    private List<Map<String, Object>> notifications(UserAccount student, List<Map<String, Object>> tasks) {
+        List<Map<String, Object>> stored = workflow.notifications(student);
+        List<Map<String, Object>> notices = new ArrayList<>(stored);
         for (Map<String, Object> task : tasks) {
             String status = String.valueOf(task.get("submissionStatus"));
             if ("待提交".equals(status)) {
@@ -251,7 +261,7 @@ public class StudentService {
                 notices.add(notification("REVIEW", "教师最终评价已发布", task.get("name") + " 已发布教师最终评价，请及时查看。", valueInstant(task.get("submittedAt")), "DONE"));
             }
         }
-        return notices.stream().sorted((left, right) -> compareInstant(right.get("createdAt"), left.get("createdAt"))).limit(10).toList();
+        return notices.stream().sorted((left, right) -> compareInstant(right.get("createdAt"), left.get("createdAt"))).limit(100).toList();
     }
 
     private Map<String, Object> notification(String type, String title, String content, Instant createdAt, String status) {
@@ -274,7 +284,8 @@ public class StudentService {
                 join user_account u on u.id=sp.user_id
                 left join administrative_class ac on ac.id=sp.administrative_class_id
                 join course c on c.id=t.course_id
-                where t.id=? and c.class_name=ac.name
+                left join course_enrollment ce on ce.course_id=c.id and ce.student_id=sp.user_id and ce.active=true
+                where t.id=? and (c.class_name=ac.name or ce.id is not null)
                 """, rs -> {
             if (!rs.next()) throw notFound("任务不存在或不属于当前学生");
             return new StudentContext(
@@ -301,7 +312,7 @@ public class StudentService {
         }
 
         List<Map<String, Object>> reviewed = jdbc.query("""
-                select teacher_score,teacher_comment
+                select teacher_score,teacher_comment,review_status
                 from task_submission
                 where task_id=? and (student_no=? or replace(student_no,'20230','2023')=?)
                 order by id desc
@@ -310,13 +321,14 @@ public class StudentService {
             Map<String, Object> value = new LinkedHashMap<>();
             value.put("teacherScore", rs.getObject("teacher_score"));
             value.put("teacherComment", rs.getString("teacher_comment"));
+            value.put("reviewStatus", rs.getString("review_status"));
             return value;
         }, context.taskId(), context.studentNo(), context.studentNo());
         if (!reviewed.isEmpty()) {
             Map<String, Object> current = reviewed.get(0);
             Object teacherScore = current.get("teacherScore");
             String teacherComment = (String) current.get("teacherComment");
-            if (teacherScore != null || (teacherComment != null && !teacherComment.isBlank())) {
+            if ("PUBLISHED".equals(current.get("reviewStatus")) || (teacherScore != null && !"RETURNED".equals(current.get("reviewStatus")))) {
                 throw new AuthException(
                         HttpStatus.CONFLICT,
                         "REPORT_ALREADY_REVIEWED",
@@ -333,24 +345,33 @@ public class StudentService {
 
     private void upsertSubmission(StudentContext context, String reportText, String attachmentJson,
                                   AiGradingService.GradeResult grade) {
-        Integer count = jdbc.queryForObject("""
-                select count(*) from task_submission
+        List<Long> existing = jdbc.query("""
+                select id from task_submission
                 where task_id=? and (student_no=? or replace(student_no,'20230','2023')=?)
-                """, Integer.class, context.taskId(), context.studentNo(), context.studentNo());
-        if (count != null && count > 0) {
+                order by id desc limit 1
+                """, (rs, row) -> rs.getLong("id"), context.taskId(), context.studentNo(), context.studentNo());
+        long submissionId;
+        if (!existing.isEmpty()) {
+            submissionId = existing.get(0);
             jdbc.update("""
                     update task_submission
-                    set student_name=?,student_no=?,submitted=true,submitted_at=?,ai_score=?,teacher_score=null,answers_json=?,report_text=?,ai_review=?,teacher_comment=null
-                    where task_id=? and (student_no=? or replace(student_no,'20230','2023')=?)
+                    set student_name=?,student_no=?,submitted=true,submitted_at=?,ai_score=?,teacher_score=null,answers_json=?,report_text=?,ai_review=?,teacher_comment=null,
+                        review_status='SUBMITTED',current_version_no=current_version_no+1
+                    where id=?
                     """, context.displayName(), context.studentNo(), Timestamp.from(Instant.now()), grade.score(), attachmentJson == null ? "[]" : attachmentJson,
-                    reportText, grade.review(), context.taskId(), context.studentNo(), context.studentNo());
-            return;
+                    reportText, grade.review(), submissionId);
+        } else {
+            jdbc.update("""
+                    insert into task_submission(task_id,student_name,student_no,submitted,submitted_at,ai_score,teacher_score,answers_json,report_text,ai_review,teacher_comment,review_status,current_version_no)
+                    values (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """, context.taskId(), context.displayName(), context.studentNo(), true, Timestamp.from(Instant.now()), grade.score(), null,
+                    attachmentJson == null ? "[]" : attachmentJson, reportText, grade.review(), null, "SUBMITTED", 1);
+            submissionId = jdbc.queryForObject("select max(id) from task_submission where task_id=? and student_no=?", Long.class, context.taskId(), context.studentNo());
         }
-        jdbc.update("""
-                insert into task_submission(task_id,student_name,student_no,submitted,submitted_at,ai_score,teacher_score,answers_json,report_text,ai_review,teacher_comment)
-                values (?,?,?,?,?,?,?,?,?,?,?)
-                """, context.taskId(), context.displayName(), context.studentNo(), true, Timestamp.from(Instant.now()), grade.score(), null,
-                attachmentJson == null ? "[]" : attachmentJson, reportText, grade.review(), null);
+        Integer version = jdbc.queryForObject("select current_version_no from task_submission where id=?", Integer.class, submissionId);
+        jdbc.update("insert into submission_version(submission_id,version_no,report_text,attachment_json,ai_score,ai_review,created_at) values (?,?,?,?,?,?,?)",
+                submissionId, version == null ? 1 : version, reportText, attachmentJson == null ? "[]" : attachmentJson,
+                grade.score(), grade.review(), Timestamp.from(Instant.now()));
     }
 
     private Map<String, Object> readJsonObject(String raw) {
@@ -375,8 +396,9 @@ public class StudentService {
         }
     }
 
-    private static String statusOf(boolean submitted, Object teacherScore, String aiReview) {
+    private static String statusOf(boolean submitted, Object teacherScore, String aiReview, String reviewStatus) {
         if (!submitted) return "待提交";
+        if ("RETURNED".equals(reviewStatus)) return "已退回";
         if (teacherScore != null) return "教师已复核";
         if (aiReview != null && !aiReview.isBlank()) return "AI 初评完成";
         return "已提交";

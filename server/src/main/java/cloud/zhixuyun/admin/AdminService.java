@@ -81,6 +81,33 @@ public class AdminService {
         return result;
     }
 
+    public Map<String, Object> logs(int page, int size, String keyword) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 100));
+        String pattern = "%" + (keyword == null ? "" : keyword.trim()) + "%";
+        Integer total = jdbc.queryForObject("select count(*) from audit_log l left join user_account u on u.id=l.actor_id where coalesce(u.display_name,'') like ? or l.action like ? or coalesce(l.detail,'') like ?",
+                Integer.class, pattern, pattern, pattern);
+        List<Map<String, Object>> content = jdbc.query("""
+                select l.id,l.action,l.target_type,l.target_id,l.detail,l.created_at,u.display_name actor_name
+                from audit_log l left join user_account u on u.id=l.actor_id
+                where coalesce(u.display_name,'') like ? or l.action like ? or coalesce(l.detail,'') like ?
+                order by l.created_at desc limit ? offset ?
+                """, (rs, row) -> {
+            Map<String, Object> value = new LinkedHashMap<>();
+            value.put("id", rs.getLong("id"));
+            value.put("actorName", rs.getString("actor_name"));
+            value.put("action", rs.getString("action"));
+            value.put("targetType", rs.getString("target_type"));
+            value.put("targetId", rs.getString("target_id"));
+            value.put("detail", rs.getString("detail"));
+            value.put("createdAt", rs.getTimestamp("created_at").toInstant());
+            return value;
+        }, pattern, pattern, pattern, safeSize, safePage * safeSize);
+        int count = total == null ? 0 : total;
+        return Map.of("content", content, "page", safePage, "size", safeSize, "totalElements", count,
+                "totalPages", count == 0 ? 0 : (count + safeSize - 1) / safeSize);
+    }
+
     public List<Map<String, Object>> users(int page, int size, String keyword, String role) {
         String normalizedKeyword = keyword == null ? "" : keyword.trim();
         String normalizedRole = role == null ? "" : role.trim().toUpperCase();

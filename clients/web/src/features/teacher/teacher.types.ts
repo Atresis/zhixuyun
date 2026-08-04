@@ -14,6 +14,7 @@ export type Submission = {
   id: number; taskId: number; studentName: string; studentNo: string; submitted: boolean; submittedAt: string | null;
   aiScore: number | null; teacherScore: number | null; answers: Array<{ questionId: number; answer: string }>;
   reportText: string | null; aiReview: string | null; teacherComment: string | null;
+  reviewStatus: "SUBMITTED" | "RETURNED" | "PUBLISHED"; currentVersionNo: number;
 };
 export type LearningTask = {
   id: number; courseId: number; taskType: "HOMEWORK" | "EXPERIMENT"; name: string; description: string;
@@ -37,6 +38,14 @@ export type Conversation = {
 };
 export type ContactCandidate = { id: number; name: string; studentNo: string; className: string };
 export type ContactCandidatePage = { items: ContactCandidate[]; page: number; size: number; total: number; pages: number };
+export type InviteCode = { courseId: number; code: string | null; enabled: boolean; expiresAt: string | null };
+export type TaskAnalytics = {
+  taskId: number;
+  summary: { totalCount: number; submittedCount: number; pendingReviewCount: number; averageScore: number | null; minimumScore: number | null; maximumScore: number | null };
+  distribution: Array<{ range: string; count: number }>;
+};
+export type RubricDimension = { name: string; weight: number; description?: string };
+export type RubricTemplate = { id: number; name: string; dimensions: RubricDimension[]; enabled: boolean; version: number; createdAt: string; updatedAt: string };
 export type TeacherWorkspace = {
   profile: TeacherProfile;
   metrics: { courseCount: number; activeTaskCount: number; pendingReviewCount: number; weeklySubmissionRate: number };

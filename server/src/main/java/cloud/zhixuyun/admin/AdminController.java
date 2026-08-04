@@ -21,6 +21,15 @@ public class AdminController {
         return service.dashboard(service.requireAdmin(authorization));
     }
 
+    @GetMapping("/logs")
+    public Map<String, Object> logs(@RequestHeader("Authorization") String authorization,
+                                    @RequestParam(defaultValue = "0") int page,
+                                    @RequestParam(defaultValue = "20") int size,
+                                    @RequestParam(defaultValue = "") String keyword) {
+        service.requireAdmin(authorization);
+        return service.logs(page, size, keyword);
+    }
+
     @GetMapping("/users")
     public Map<String, Object> users(@RequestHeader("Authorization") String authorization,
                                      @RequestParam(defaultValue = "0") int page,
