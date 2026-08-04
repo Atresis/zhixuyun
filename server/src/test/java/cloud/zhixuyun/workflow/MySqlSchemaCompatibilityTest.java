@@ -22,6 +22,9 @@ class MySqlSchemaCompatibilityTest {
             try (var tables = connection.getMetaData().getTables(null, null, "submission_version", new String[]{"TABLE"})) {
                 assertTrue(tables.next());
             }
+            try (var columns = connection.getMetaData().getColumns(null, null, "administrative_class", "class_code")) {
+                assertTrue(columns.next());
+            }
         }
     }
 }

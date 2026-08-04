@@ -271,10 +271,23 @@ public class AdminService {
             throw badRequest("Login name already exists");
         }
         Role role = parseRole(body.get("role"), Role.STUDENT);
+        String studentNo = role == Role.STUDENT
+                ? firstNonBlank(trimToNull(textOrNull(body, "studentNo")), loginName)
+                : null;
+        if (role == Role.STUDENT && (studentNo == null || !studentNo.matches("\\d{6,20}"))) {
+            throw badRequest("Student number must contain 6 to 20 digits");
+        }
+        if (role == Role.STUDENT && !loginName.equals(studentNo)) {
+            throw badRequest("Student login name must be the student number");
+        }
+        String requestedPassword = trimToNull(textOrNull(body, "password"));
+        String initialPassword = requestedPassword != null
+                ? requestedPassword
+                : role == Role.STUDENT ? studentNumbers.defaultPassword(studentNo) : "123456";
         UserAccount user = new UserAccount(
                 null,
                 loginName,
-                auth.encodePassword(text(body, "password", "123456")),
+                auth.encodePassword(initialPassword),
                 required(body, "displayName", 80),
                 role,
                 booleanValue(body.get("enabled"), true)
@@ -282,7 +295,7 @@ public class AdminService {
         user.setEmail(trimToNull(text(body, "email", "")));
         user.setPhone(trimToNull(text(body, "phone", "")));
         user.setBio(trimToNull(text(body, "bio", "")));
-        user.setMustChangePassword(booleanValue(body.get("mustChangePassword"), false));
+        user.setMustChangePassword(booleanValue(body.get("mustChangePassword"), role == Role.STUDENT));
         users.save(user);
         if (role == Role.STUDENT) {
             saveStudentProfile(user.getId(), body, loginName, false);
@@ -545,7 +558,7 @@ public class AdminService {
 
     public List<Map<String, Object>> administrativeClasses() {
         return jdbc.query("""
-                select id,name,grade_year,major_name,enabled
+                select id,name,grade_year,college_name,college_code,major_name,major_code,class_code,enabled
                 from administrative_class
                 order by id desc
                 """, (rs, row) -> {
@@ -553,7 +566,11 @@ public class AdminService {
             item.put("id", rs.getLong("id"));
             item.put("name", rs.getString("name"));
             item.put("gradeYear", rs.getString("grade_year"));
+            item.put("collegeName", rs.getString("college_name"));
+            item.put("collegeCode", rs.getString("college_code"));
             item.put("majorName", rs.getString("major_name"));
+            item.put("majorCode", rs.getString("major_code"));
+            item.put("classCode", rs.getString("class_code"));
             item.put("enabled", rs.getBoolean("enabled"));
             return item;
         });
@@ -562,12 +579,16 @@ public class AdminService {
     @Transactional
     public Map<String, Object> createAdministrativeClass(UserAccount actor, Map<String, Object> body) {
         long classId = insert("""
-                insert into administrative_class(name,grade_year,major_name,enabled)
-                values (?,?,?,?)
+                insert into administrative_class(name,grade_year,college_name,college_code,major_name,major_code,class_code,enabled)
+                values (?,?,?,?,?,?,?,?)
                 """,
                 required(body, "name", 120),
                 required(body, "gradeYear", 20),
+                trimToNull(text(body, "collegeName", "")),
+                optionalTwoDigitCode(body, "collegeCode"),
                 trimToNull(text(body, "majorName", "")),
+                optionalTwoDigitCode(body, "majorCode"),
+                optionalTwoDigitCode(body, "classCode"),
                 booleanValue(body.get("enabled"), true)
         );
         audit(actor, "CREATE_ADMINISTRATIVE_CLASS", "ADMINISTRATIVE_CLASS", classId, text(body, "name", ""));
@@ -579,12 +600,16 @@ public class AdminService {
         Map<String, Object> current = administrativeClassSnapshot(classId);
         jdbc.update("""
                 update administrative_class
-                set name=?, grade_year=?, major_name=?, enabled=?
+                set name=?, grade_year=?, college_name=?, college_code=?, major_name=?, major_code=?, class_code=?, enabled=?
                 where id=?
                 """,
                 body.containsKey("name") ? required(body, "name", 120) : current.get("name"),
                 body.containsKey("gradeYear") ? required(body, "gradeYear", 20) : current.get("gradeYear"),
+                body.containsKey("collegeName") ? trimToNull(text(body, "collegeName", "")) : current.get("collegeName"),
+                body.containsKey("collegeCode") ? optionalTwoDigitCode(body, "collegeCode") : current.get("collegeCode"),
                 body.containsKey("majorName") ? trimToNull(text(body, "majorName", "")) : current.get("majorName"),
+                body.containsKey("majorCode") ? optionalTwoDigitCode(body, "majorCode") : current.get("majorCode"),
+                body.containsKey("classCode") ? optionalTwoDigitCode(body, "classCode") : current.get("classCode"),
                 body.containsKey("enabled") ? booleanValue(body.get("enabled"), true) : current.get("enabled"),
                 classId
         );
@@ -664,7 +689,8 @@ public class AdminService {
             payload.put("loginName", loginName);
             payload.put("displayName", displayName);
             payload.put("role", "STUDENT");
-            payload.put("password", firstNonBlank(trimToNull(row.get("password")), "123456"));
+            String password = trimToNull(row.get("password"));
+            if (password != null) payload.put("password", password);
             payload.put("email", trimToNull(row.get("email")));
             payload.put("studentNo", studentNo);
             payload.put("gradeYear", trimToNull(row.get("gradeYear")));
@@ -766,7 +792,7 @@ public class AdminService {
 
     private Map<String, Object> administrativeClassSnapshot(long classId) {
         return jdbc.query("""
-                select id,name,grade_year,major_name,enabled
+                select id,name,grade_year,college_name,college_code,major_name,major_code,class_code,enabled
                 from administrative_class
                 where id=?
                 """, rs -> {
@@ -777,7 +803,11 @@ public class AdminService {
             item.put("id", rs.getLong("id"));
             item.put("name", rs.getString("name"));
             item.put("gradeYear", rs.getString("grade_year"));
+            item.put("collegeName", rs.getString("college_name"));
+            item.put("collegeCode", rs.getString("college_code"));
             item.put("majorName", rs.getString("major_name"));
+            item.put("majorCode", rs.getString("major_code"));
+            item.put("classCode", rs.getString("class_code"));
             item.put("enabled", rs.getBoolean("enabled"));
             return item;
         }, classId);
@@ -791,10 +821,27 @@ public class AdminService {
             throw badRequest("Student number is required");
         }
         Map<String, String> inferred = studentNumbers.infer(studentNo);
-        String gradeYear = firstNonBlank(trimToNull(textOrNull(values, "gradeYear")), inferred.get("gradeYear"));
+        String requestedGradeYear = trimToNull(textOrNull(values, "gradeYear"));
+        String inferredGradeYear = inferred.get("gradeYear");
+        if (requestedGradeYear != null && inferredGradeYear != null && !requestedGradeYear.equals(inferredGradeYear)) {
+            throw badRequest("Grade year does not match the student number");
+        }
+        String gradeYear = firstNonBlank(inferredGradeYear, requestedGradeYear);
         Long administrativeClassId = longValue(values.get("administrativeClassId"));
         if (administrativeClassId == null) {
-            administrativeClassId = findAdministrativeClassId(firstNonBlank(trimToNull(textOrNull(values, "administrativeClassName")), inferred.get("administrativeClassName")));
+            administrativeClassId = findAdministrativeClassId(trimToNull(textOrNull(values, "administrativeClassName")));
+        }
+        Long inferredClassId = longValue(inferred.get("administrativeClassId"));
+        if (inferredClassId != null) {
+            if (administrativeClassId != null && !administrativeClassId.equals(inferredClassId)) {
+                throw badRequest("Administrative class does not match the student number");
+            }
+            administrativeClassId = inferredClassId;
+        } else if (inferredGradeYear != null && administrativeClassId == null) {
+            if ("AMBIGUOUS".equals(inferred.get("status"))) {
+                throw badRequest("Student number matches multiple administrative classes; configure class codes first");
+            }
+            throw badRequest("No enabled administrative class matches the student number");
         }
         if (existing) {
             Long owner = jdbc.query("select user_id from student_profile where student_no=?", rs -> rs.next() ? rs.getLong(1) : null, studentNo);
@@ -1020,6 +1067,15 @@ public class AdminService {
         } catch (NumberFormatException ignored) {
             return null;
         }
+    }
+
+    private static String optionalTwoDigitCode(Map<String, Object> body, String key) {
+        String value = trimToNull(text(body, key, ""));
+        if (value == null) return null;
+        if (!value.matches("\\d{1,2}")) {
+            throw badRequest(key + " must contain one or two digits");
+        }
+        return String.format("%02d", Integer.parseInt(value));
     }
 
     private static int integer(Object value, int fallback) {

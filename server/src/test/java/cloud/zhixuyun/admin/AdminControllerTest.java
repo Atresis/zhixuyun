@@ -72,7 +72,7 @@ class AdminControllerTest {
         mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"loginName":"student-001","displayName":"测试学生","role":"STUDENT","studentNo":"20260001","gradeYear":"2026"}
+                                {"loginName":"20260001","displayName":"测试学生","role":"STUDENT","studentNo":"20260001","gradeYear":"2026"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("STUDENT"));
@@ -95,14 +95,14 @@ class AdminControllerTest {
 
     @Test
     void batchImportStudentsCreatesProfiles() throws Exception {
-        long classId = insertAdministrativeClass("2026级软件工程1班", "2026");
+        long classId = insertCodedAdministrativeClass("2026级软件工程1班", "2026", "03", "01", "01");
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "students.csv",
                 "text/csv",
-                ("studentNo,displayName,loginName,gradeYear,administrativeClassName\n" +
-                        "20260002,学生甲,student-a,2026,2026级软件工程1班\n" +
-                        "20260003,学生乙,student-b,2026,2026级软件工程1班\n").getBytes(StandardCharsets.UTF_8)
+                ("studentNo,displayName\n" +
+                        "202601010001,学生甲\n" +
+                        "202601010002,学生乙\n").getBytes(StandardCharsets.UTF_8)
         );
 
         mvc.perform(multipart("/api/v1/admin/users/import")
@@ -114,6 +114,60 @@ class AdminControllerTest {
 
         Integer count = jdbc.queryForObject("select count(*) from student_profile where administrative_class_id=?", Integer.class, classId);
         Assertions.assertEquals(2, count);
+    }
+
+    @Test
+    void studentNumberSetsAccountPasswordClassAndFirstLoginPolicy() throws Exception {
+        long currentClassId = insertCodedAdministrativeClass("2025级软件工程2班", "2025", null, "11", "02");
+        long legacyClassId = insertCodedAdministrativeClass("2023级软件工程5班", "2023", "03", "01", "05");
+
+        mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"loginName":"202511020089","studentNo":"202511020089","displayName":"十二位学号学生","role":"STUDENT"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.administrativeClassId").value(currentClassId))
+                .andExpect(jsonPath("$.gradeYear").value("2025"));
+
+        mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"loginName":"2303010507","studentNo":"2303010507","displayName":"十位学号学生","role":"STUDENT"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.administrativeClassId").value(legacyClassId))
+                .andExpect(jsonPath("$.gradeYear").value("2023"));
+
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"account\":\"202511020089\",\"password\":\"020089\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.mustChangePassword").value(true));
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"account\":\"2303010507\",\"password\":\"010507\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.mustChangePassword").value(true));
+    }
+
+    @Test
+    void studentLoginNameMustEqualStudentNumber() throws Exception {
+        mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"loginName":"student-alias","studentNo":"202511020089","displayName":"错误账号","role":"STUDENT"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void recognizedStudentNumberRequiresOneMatchingClass() throws Exception {
+        mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"loginName":"202599990001","studentNo":"202599990001","displayName":"未配置班级学生","role":"STUDENT"}
+                                """))
+                .andExpect(status().isBadRequest());
+        Assertions.assertTrue(users.findByLoginName("202599990001").isEmpty());
     }
 
     @Test
@@ -246,6 +300,15 @@ class AdminControllerTest {
     private long insertAdministrativeClass(String name, String gradeYear) {
         jdbc.update("insert into administrative_class(name,grade_year,major_name,enabled) values (?,?,?,?)",
                 name, gradeYear, "软件工程", true);
+        return jdbc.queryForObject("select max(id) from administrative_class", Long.class);
+    }
+
+    private long insertCodedAdministrativeClass(String name, String gradeYear, String collegeCode, String majorCode, String classCode) {
+        jdbc.update("""
+                        insert into administrative_class(name,grade_year,college_name,college_code,major_name,major_code,class_code,enabled)
+                        values (?,?,?,?,?,?,?,?)
+                        """,
+                name, gradeYear, "软件学院", collegeCode, "软件工程", majorCode, classCode, true);
         return jdbc.queryForObject("select max(id) from administrative_class", Long.class);
     }
 

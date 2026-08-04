@@ -689,13 +689,14 @@ components:
           $ref: '#/components/schemas/CurrentUserResponse'
     CurrentUserResponse:
       type: object
-      required: [id, loginName, displayName, role, enabled]
+      required: [id, loginName, displayName, role, enabled, mustChangePassword]
       properties:
         id: { type: integer, format: int64 }
         loginName: { type: string }
         displayName: { type: string }
         role: { type: string, enum: [STUDENT, TEACHER, ADMIN] }
         enabled: { type: boolean }
+        mustChangePassword: { type: boolean }
     ProfileResponse:
       type: object
       required: [id, loginName, displayName, email, phone, bio, role, enabled, mustChangePassword, hasAvatar]

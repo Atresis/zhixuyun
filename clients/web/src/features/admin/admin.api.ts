@@ -39,7 +39,17 @@ export type AdminCourse = {
   classes: AdminClass[];
   teachers: CourseTeacher[];
 };
-export type AdministrativeClass = { id: number; name: string; gradeYear: string; majorName?: string; enabled: boolean };
+export type AdministrativeClass = {
+  id: number;
+  name: string;
+  gradeYear: string;
+  collegeName?: string;
+  collegeCode?: string;
+  majorName?: string;
+  majorCode?: string;
+  classCode?: string;
+  enabled: boolean;
+};
 export type TeacherDetail = {
   id: number;
   loginName: string;

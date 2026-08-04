@@ -6,7 +6,7 @@ export type AuthUser = {
   displayName: string;
   role: Role;
   enabled: boolean;
-  mustChangePassword?: boolean;
+  mustChangePassword: boolean;
 };
 
 export type LoginResponse = {
