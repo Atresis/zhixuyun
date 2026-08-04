@@ -69,15 +69,17 @@ class AdminControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.metrics.userCount").value(2));
 
+        insertCodedAdministrativeClass("2026级软件工程1班", "2026", "03", "01", "01");
+
         mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"loginName":"20260001","displayName":"测试学生","role":"STUDENT","studentNo":"20260001","gradeYear":"2026"}
+                                {"loginName":"2603010101","displayName":"测试学生","role":"STUDENT","studentNo":"2603010101","gradeYear":"2026"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("STUDENT"));
 
-        Integer count = jdbc.queryForObject("select count(*) from student_profile where student_no='20260001'", Integer.class);
+        Integer count = jdbc.queryForObject("select count(*) from student_profile where student_no='2603010101'", Integer.class);
         Assertions.assertEquals(1, count);
     }
 
@@ -101,8 +103,8 @@ class AdminControllerTest {
                 "students.csv",
                 "text/csv",
                 ("studentNo,displayName\n" +
-                        "202601010001,学生甲\n" +
-                        "202601010002,学生乙\n").getBytes(StandardCharsets.UTF_8)
+                        "2603010101,学生甲\n" +
+                        "2603010102,学生乙\n").getBytes(StandardCharsets.UTF_8)
         );
 
         mvc.perform(multipart("/api/v1/admin/users/import")
@@ -118,17 +120,7 @@ class AdminControllerTest {
 
     @Test
     void studentNumberSetsAccountPasswordClassAndFirstLoginPolicy() throws Exception {
-        long currentClassId = insertCodedAdministrativeClass("2025级软件工程2班", "2025", null, "11", "02");
-        long legacyClassId = insertCodedAdministrativeClass("2023级软件工程5班", "2023", "03", "01", "05");
-
-        mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"loginName":"202511020089","studentNo":"202511020089","displayName":"十二位学号学生","role":"STUDENT"}
-                                """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.administrativeClassId").value(currentClassId))
-                .andExpect(jsonPath("$.gradeYear").value("2025"));
+        long classId = insertCodedAdministrativeClass("2023级软件工程5班", "2023", "03", "01", "05");
 
         mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -136,13 +128,9 @@ class AdminControllerTest {
                                 {"loginName":"2303010507","studentNo":"2303010507","displayName":"十位学号学生","role":"STUDENT"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.administrativeClassId").value(legacyClassId))
+                .andExpect(jsonPath("$.administrativeClassId").value(classId))
                 .andExpect(jsonPath("$.gradeYear").value("2023"));
 
-        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"account\":\"202511020089\",\"password\":\"020089\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.user.mustChangePassword").value(true));
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"account\":\"2303010507\",\"password\":\"010507\"}"))
                 .andExpect(status().isOk())
@@ -154,7 +142,7 @@ class AdminControllerTest {
         mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"loginName":"student-alias","studentNo":"202511020089","displayName":"错误账号","role":"STUDENT"}
+                                {"loginName":"student-alias","studentNo":"2303010507","displayName":"错误账号","role":"STUDENT"}
                                 """))
                 .andExpect(status().isBadRequest());
     }
@@ -164,10 +152,21 @@ class AdminControllerTest {
         mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"loginName":"202599990001","studentNo":"202599990001","displayName":"未配置班级学生","role":"STUDENT"}
+                                {"loginName":"2699990101","studentNo":"2699990101","displayName":"未配置班级学生","role":"STUDENT"}
                                 """))
                 .andExpect(status().isBadRequest());
-        Assertions.assertTrue(users.findByLoginName("202599990001").isEmpty());
+        Assertions.assertTrue(users.findByLoginName("2699990101").isEmpty());
+    }
+
+    @Test
+    void studentNumberMustContainExactlyTenDigits() throws Exception {
+        mvc.perform(post("/api/v1/admin/users").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"loginName":"202603010101","studentNo":"202603010101","displayName":"无效学号学生","role":"STUDENT"}
+                                """))
+                .andExpect(status().isBadRequest());
+        Assertions.assertTrue(users.findByLoginName("202603010101").isEmpty());
     }
 
     @Test

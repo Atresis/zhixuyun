@@ -150,7 +150,7 @@ function downloadCsv(filename: string, rows: string[][]) {
 function exportRows() {
   downloadCsv(mode.value === "STUDENT" ? "学生账号.csv" : "教师名册.csv", [["姓名", "账号", "邮箱", "班级", "状态"], ...filteredRows.value.map((item) => [item.displayName, item.loginName, item.email || "", item.administrativeClassName || "", item.enabled ? "正常" : "已停用"])]);
 }
-function downloadTemplate() { downloadCsv("学生导入模板.csv", [["学号", "姓名"], ["202511020089", "王以安"]]); }
+function downloadTemplate() { downloadCsv("学生导入模板.csv", [["学号", "姓名"], ["2303010507", "王以安"]]); }
 </script>
 
 <template>
@@ -199,9 +199,9 @@ function downloadTemplate() { downloadCsv("学生导入模板.csv", [["学号", 
 
     <AdminModal v-if="dialog === 'students'" title="新增学生账号" subtitle="支持逐行录入或使用模板批量导入" wide @close="dialog = null">
       <div class="admin-info-strip"><Info :size="16" />账号即学号，系统按学号自动匹配学院、专业和行政班，初始密码为学号后六位。</div>
-      <label class="admin-field admin-import-input"><span>按格式录入学生</span><textarea v-model="importText" placeholder="202511020089,王以安" /></label>
+      <label class="admin-field admin-import-input"><span>按格式录入学生</span><textarea v-model="importText" placeholder="2303010507,王以安" /></label>
       <small class="admin-help-text">字段之间使用英文逗号分隔，支持一次粘贴多行。</small>
-      <div class="admin-format-example"><strong>录入格式示例</strong><code>202511020089,王以安</code></div>
+      <div class="admin-format-example"><strong>录入格式示例</strong><code>2303010507,王以安</code></div>
       <label class="admin-upload-zone"><FileSpreadsheet :size="20" /><strong>使用 Excel 模板批量添加</strong><span>支持 XLSX 或 CSV 文件，单次最多导入 2,000 个账号</span><div><button class="admin-secondary-button" type="button" @click.prevent="downloadTemplate"><Download :size="16" />下载模板</button><span class="admin-primary-button"><Upload :size="16" />选择文件</span></div><input type="file" accept=".xlsx,.csv" @change="pickFile" /></label>
       <div class="admin-validation-key"><span>● 等待校验</span><span>● 校验通过</span><span>● 重复学号与格式错误会定位到具体行</span></div>
       <p v-if="message" class="admin-form-error">{{ message }}</p>
