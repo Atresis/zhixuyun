@@ -11,8 +11,7 @@ import java.util.regex.Pattern;
 
 @Service
 public class StudentNumberService {
-    private static final Pattern LEGACY_NUMBER = Pattern.compile("^(\\d{2})(\\d{2})(\\d{2})(\\d{2})(\\d{2})$");
-    private static final Pattern CURRENT_NUMBER = Pattern.compile("^(20\\d{2})(\\d{2})(\\d{2})(\\d{4})$");
+    private static final Pattern STUDENT_NUMBER = Pattern.compile("^(\\d{2})(\\d{2})(\\d{2})(\\d{2})(\\d{2})$");
     private static final Pattern CLASS_NAME = Pattern.compile("(\\d{1,2})班(?:$|\\D)");
     private final JdbcTemplate jdbc;
 
@@ -62,20 +61,22 @@ public class StudentNumberService {
 
     public String defaultPassword(String studentNo) {
         String normalized = studentNo == null ? "" : studentNo.trim();
-        if (normalized.length() < 6) {
-            throw new IllegalArgumentException("Student number must contain at least 6 characters");
+        if (!STUDENT_NUMBER.matcher(normalized).matches()) {
+            throw new IllegalArgumentException("Student number must contain exactly 10 digits");
         }
         return normalized.substring(normalized.length() - 6);
     }
 
     private ParsedNumber parse(String value) {
-        Matcher current = CURRENT_NUMBER.matcher(value);
-        if (current.matches()) {
-            return new ParsedNumber("YYYYMMCCSSSS", current.group(1), null, current.group(2), current.group(3));
-        }
-        Matcher legacy = LEGACY_NUMBER.matcher(value);
-        if (legacy.matches()) {
-            return new ParsedNumber("YYAAMMCCSS", "20" + legacy.group(1), legacy.group(2), legacy.group(3), legacy.group(4));
+        Matcher studentNumber = STUDENT_NUMBER.matcher(value);
+        if (studentNumber.matches()) {
+            return new ParsedNumber(
+                    "YYAAMMCCSS",
+                    "20" + studentNumber.group(1),
+                    studentNumber.group(2),
+                    studentNumber.group(3),
+                    studentNumber.group(4)
+            );
         }
         return null;
     }

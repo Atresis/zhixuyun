@@ -274,8 +274,8 @@ public class AdminService {
         String studentNo = role == Role.STUDENT
                 ? firstNonBlank(trimToNull(textOrNull(body, "studentNo")), loginName)
                 : null;
-        if (role == Role.STUDENT && (studentNo == null || !studentNo.matches("\\d{6,20}"))) {
-            throw badRequest("Student number must contain 6 to 20 digits");
+        if (role == Role.STUDENT && (studentNo == null || !studentNo.matches("\\d{10}"))) {
+            throw badRequest("Student number must contain exactly 10 digits");
         }
         if (role == Role.STUDENT && !loginName.equals(studentNo)) {
             throw badRequest("Student login name must be the student number");
