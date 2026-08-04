@@ -6,6 +6,7 @@ import cloud.zhixuyun.auth.AuthSessionService;
 import cloud.zhixuyun.auth.Role;
 import cloud.zhixuyun.auth.UserAccount;
 import cloud.zhixuyun.storage.ResourceStorage;
+import cloud.zhixuyun.workflow.LearningWorkflowService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
@@ -34,13 +35,16 @@ public class TeacherService {
     private final ObjectMapper json;
     private final AiAssistantClient ai;
     private final ResourceStorage resourceStorage;
+    private final LearningWorkflowService workflow;
 
-    public TeacherService(JdbcTemplate jdbc, AuthSessionService sessions, ObjectMapper json, ResourceStorage resourceStorage, AiAssistantClient ai) {
+    public TeacherService(JdbcTemplate jdbc, AuthSessionService sessions, ObjectMapper json, ResourceStorage resourceStorage,
+                          AiAssistantClient ai, LearningWorkflowService workflow) {
         this.jdbc = jdbc;
         this.sessions = sessions;
         this.json = json;
         this.ai = ai;
         this.resourceStorage = resourceStorage;
+        this.workflow = workflow;
     }
 
     public UserAccount requireTeacher(String authorization) {
@@ -87,9 +91,13 @@ public class TeacherService {
     public Map<String, Object> updateProfile(UserAccount teacher, Map<String, Object> body) {
         String displayName = text(body, "displayName", teacher.getDisplayName());
         jdbc.update("update user_account set display_name=? where id=?", displayName, teacher.getId());
-        jdbc.update("merge into teacher_profile(user_id,department,title,email,phone,bio) key(user_id) values (?,?,?,?,?,?)",
-                teacher.getId(), text(body, "department", "软件工程系"), text(body, "title", "教师"),
-                text(body, "email", ""), text(body, "phone", ""), text(body, "bio", ""));
+        Object[] values = { text(body, "department", "软件工程系"), text(body, "title", "教师"),
+                text(body, "email", ""), text(body, "phone", ""), text(body, "bio", ""), teacher.getId() };
+        int changed = jdbc.update("update teacher_profile set department=?,title=?,email=?,phone=?,bio=? where user_id=?", values);
+        if (changed == 0) {
+            jdbc.update("insert into teacher_profile(user_id,department,title,email,phone,bio) values (?,?,?,?,?,?)",
+                    teacher.getId(), values[0], values[1], values[2], values[3], values[4]);
+        }
         teacher.setDisplayName(displayName);
         return profile(teacher);
     }
@@ -145,6 +153,7 @@ public class TeacherService {
         long id = insert("insert into learning_task(course_id,task_type,name,description,start_at,deadline,max_score,questions_json,created_at) values (?,?,?,?,?,?,?,?,?)",
                 courseId, type, text(body, "name", defaultTaskName(type)), text(body, "description", ""), Timestamp.from(start),
                 Timestamp.from(deadline), integer(body.get("maxScore"), 100), questions, Timestamp.from(Instant.now()));
+        workflow.notifyCourseStudents(courseId, "发布了新的实验任务", text(body, "name", defaultTaskName(type)) + " 已发布，请及时查看要求与截止时间。", "TASK", id);
         return task(id, teacher.getId());
     }
 
@@ -177,8 +186,9 @@ public class TeacherService {
         int score = integer(body.get("teacherScore"), -1);
         int max = (int) current.get("maxScore");
         if (score < 0 || score > max) throw badRequest("评分必须在 0 到满分之间");
-        jdbc.update("update task_submission set teacher_score=?,teacher_comment=? where id=?",
+        jdbc.update("update task_submission set teacher_score=?,teacher_comment=?,review_status='PUBLISHED' where id=?",
                 score, text(body, "teacherComment", ""), submissionId);
+        workflow.notifySubmissionStudent(submissionId, "教师评价已发布", "最终成绩：" + score + " 分。" + text(body, "teacherComment", ""));
         return submission(submissionId);
     }
 
@@ -231,16 +241,19 @@ public class TeacherService {
         int safePage = Math.max(1, page);
         String keyword = query == null ? "" : query.trim();
         String pattern = "%" + keyword + "%";
-        Integer total = jdbc.queryForObject("select count(*) from student_profile sp join user_account u on u.id=sp.user_id "
-                + "join administrative_class ac on ac.id=sp.administrative_class_id "
-                + "where ac.name=(select class_name from course where id=? and teacher_id=?) "
+        Integer total = jdbc.queryForObject("select count(distinct sp.user_id) from student_profile sp join user_account u on u.id=sp.user_id "
+                + "left join administrative_class ac on ac.id=sp.administrative_class_id "
+                + "left join course_enrollment ce on ce.student_id=sp.user_id and ce.course_id=? and ce.active=true "
+                + "where (ac.name=(select class_name from course where id=? and teacher_id=?) or ce.id is not null) "
                 + "and (u.display_name like ? or sp.student_no like ?)", Integer.class,
-                courseId, teacher.getId(), pattern, pattern);
+                courseId, courseId, teacher.getId(), pattern, pattern);
         int offset = (safePage - 1) * safeSize;
-        List<Map<String, Object>> items = jdbc.query("select u.id,u.display_name,sp.student_no,ac.name class_name "
+        List<Map<String, Object>> items = jdbc.query("select distinct u.id,u.display_name,sp.student_no,coalesce(ac.name,c.class_name) class_name "
                         + "from student_profile sp join user_account u on u.id=sp.user_id "
-                        + "join administrative_class ac on ac.id=sp.administrative_class_id "
-                        + "where ac.name=(select class_name from course where id=? and teacher_id=?) "
+                        + "left join administrative_class ac on ac.id=sp.administrative_class_id "
+                        + "left join course_enrollment ce on ce.student_id=sp.user_id and ce.course_id=? and ce.active=true "
+                        + "join course c on c.id=? and c.teacher_id=? "
+                        + "where (ac.name=c.class_name or ce.id is not null) "
                         + "and (u.display_name like ? or sp.student_no like ?) "
                         + "order by sp.student_no limit ? offset ?",
                 (rs, row) -> {
@@ -248,7 +261,7 @@ public class TeacherService {
                     item.put("id", rs.getLong("id")); item.put("name", rs.getString("display_name"));
                     item.put("studentNo", rs.getString("student_no")); item.put("className", rs.getString("class_name"));
                     return item;
-                }, courseId, teacher.getId(), pattern, pattern, safeSize, offset);
+                }, courseId, courseId, teacher.getId(), pattern, pattern, safeSize, offset);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("items", items); result.put("page", safePage); result.put("size", safeSize);
         result.put("total", total == null ? 0 : total); result.put("pages", total == null || total == 0 ? 0 : (total + safeSize - 1) / safeSize);
@@ -259,12 +272,14 @@ public class TeacherService {
     public Map<String, Object> createConversation(UserAccount teacher, long studentId, String content) {
         if (content == null || content.isBlank()) throw badRequest("首条消息不能为空");
         Map<String, Object> student = jdbc.query("select u.id,u.display_name,sp.student_no from student_profile sp "
-                        + "join user_account u on u.id=sp.user_id join administrative_class ac on ac.id=sp.administrative_class_id "
-                        + "where u.id=? and exists (select 1 from course c where c.teacher_id=? and c.class_name=ac.name)",
+                        + "join user_account u on u.id=sp.user_id left join administrative_class ac on ac.id=sp.administrative_class_id "
+                        + "where u.id=? and (exists (select 1 from course c where c.teacher_id=? and c.class_name=ac.name) "
+                        + "or exists (select 1 from course c join course_enrollment ce on ce.course_id=c.id "
+                        + "where c.teacher_id=? and ce.student_id=sp.user_id and ce.active=true))",
                 rs -> {
                     if (!rs.next()) throw notFound("学生不在当前任课班级中");
                     return Map.of("id", rs.getLong("id"), "name", rs.getString("display_name"), "studentNo", rs.getString("student_no"));
-                }, studentId, teacher.getId());
+                }, studentId, teacher.getId(), teacher.getId());
         Integer existing = jdbc.queryForObject("select count(*) from conversation where teacher_id=? and student_id=?", Integer.class,
                 teacher.getId(), studentId);
         if (existing != null && existing > 0) throw badRequest("该学生已经存在会话");
@@ -377,30 +392,32 @@ public class TeacherService {
     }
 
     private List<Map<String, Object>> submissions(long taskId) {
-        return jdbc.query("select id,task_id,student_name,student_no,submitted,submitted_at,ai_score,teacher_score,answers_json,report_text,ai_review,teacher_comment from task_submission where task_id=? order by submitted desc,student_name",
+        return jdbc.query("select id,task_id,student_name,student_no,submitted,submitted_at,ai_score,teacher_score,answers_json,report_text,ai_review,teacher_comment,review_status,current_version_no from task_submission where task_id=? order by submitted desc,student_name",
                 (rs, row) -> submissionMap(rs.getLong("id"), rs.getLong("task_id"), rs.getString("student_name"), rs.getString("student_no"),
                         rs.getBoolean("submitted"), rs.getTimestamp("submitted_at"), (Integer) rs.getObject("ai_score"),
                         (Integer) rs.getObject("teacher_score"), rs.getString("answers_json"), rs.getString("report_text"),
-                        rs.getString("ai_review"), rs.getString("teacher_comment")), taskId);
+                        rs.getString("ai_review"), rs.getString("teacher_comment"), rs.getString("review_status"), rs.getInt("current_version_no")), taskId);
     }
 
     private Map<String, Object> submission(long id) {
-        return jdbc.query("select id,task_id,student_name,student_no,submitted,submitted_at,ai_score,teacher_score,answers_json,report_text,ai_review,teacher_comment from task_submission where id=?", rs -> {
+        return jdbc.query("select id,task_id,student_name,student_no,submitted,submitted_at,ai_score,teacher_score,answers_json,report_text,ai_review,teacher_comment,review_status,current_version_no from task_submission where id=?", rs -> {
             if (!rs.next()) throw notFound("提交不存在");
             return submissionMap(rs.getLong("id"), rs.getLong("task_id"), rs.getString("student_name"), rs.getString("student_no"),
                     rs.getBoolean("submitted"), rs.getTimestamp("submitted_at"), (Integer) rs.getObject("ai_score"),
                     (Integer) rs.getObject("teacher_score"), rs.getString("answers_json"), rs.getString("report_text"),
-                    rs.getString("ai_review"), rs.getString("teacher_comment"));
+                    rs.getString("ai_review"), rs.getString("teacher_comment"), rs.getString("review_status"), rs.getInt("current_version_no"));
         }, id);
     }
 
     private Map<String, Object> submissionMap(long id, long taskId, String name, String no, boolean submitted, Timestamp submittedAt,
-                                               Integer aiScore, Integer teacherScore, String answers, String report, String aiReview, String teacherComment) {
+                                               Integer aiScore, Integer teacherScore, String answers, String report, String aiReview, String teacherComment,
+                                               String reviewStatus, int currentVersionNo) {
         Map<String, Object> value = new LinkedHashMap<>();
         value.put("id", id); value.put("taskId", taskId); value.put("studentName", name); value.put("studentNo", no);
         value.put("submitted", submitted); value.put("submittedAt", submittedAt == null ? null : submittedAt.toInstant());
         value.put("aiScore", aiScore); value.put("teacherScore", teacherScore); value.put("answers", readJson(answers));
-        value.put("reportText", report); value.put("aiReview", aiReview); value.put("teacherComment", teacherComment); return value;
+        value.put("reportText", report); value.put("aiReview", aiReview); value.put("teacherComment", teacherComment);
+        value.put("reviewStatus", reviewStatus); value.put("currentVersionNo", currentVersionNo); return value;
     }
 
     private Map<String, Object> metrics(long teacherId, List<Map<String, Object>> courses) {

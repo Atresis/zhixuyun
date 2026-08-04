@@ -53,9 +53,11 @@ export type TeacherDetail = {
   teachingClassAssignments: Array<{ teachingClassId: number; teachingClassName: string; term: string; courseId: number; courseName: string }>;
 };
 export type StudentImportResult = { createdCount: number; skippedCount: number; items: AdminUser[] };
+export type AuditLog = { id: number; actorName?: string; action: string; targetType?: string; targetId?: string; detail?: string; createdAt: string };
 
 export const adminApi = {
   dashboard: () => apiRequest<{ metrics: Record<string, number>; users: AdminUser[]; health: Record<string, string> }>("/admin/dashboard"),
+  logs: (page = 0, keyword = "") => apiRequest<AdminPage<AuditLog>>(`/admin/logs?page=${page}&size=20&keyword=${encodeURIComponent(keyword)}`),
   users: (params: { page?: number; size?: number; keyword?: string; role?: string } = {}) =>
     apiRequest<AdminPage<AdminUser>>(`/admin/users?${new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined) as [string, string][]).toString()}`),
   teachers: (keyword = "") => apiRequest<{ content: AdminUser[] }>(`/admin/teachers?keyword=${encodeURIComponent(keyword)}`),

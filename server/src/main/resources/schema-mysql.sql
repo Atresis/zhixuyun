@@ -57,7 +57,7 @@ create table if not exists audit_log (
   constraint fk_mysql_audit_actor foreign key (actor_id) references user_account(id) on delete set null
 );
 create table if not exists course_resource (
-  id bigint not null auto_increment primary key, course_id bigint not null, owner_id bigint, kind varchar(30) not null, name varchar(255) not null, source_label varchar(120) not null, shared boolean not null default false, content_type varchar(120), content longblob, created_at timestamp not null,
+  id bigint not null auto_increment primary key, course_id bigint not null, owner_id bigint, kind varchar(30) not null, name varchar(255) not null, source_label varchar(120) not null, shared boolean not null default false, content_type varchar(120), storage_backend varchar(40), storage_key varchar(500), file_size bigint, content longblob, created_at timestamp not null,
   constraint fk_mysql_resource_course foreign key (course_id) references course(id) on delete cascade,
   constraint fk_mysql_resource_owner foreign key (owner_id) references user_account(id) on delete set null
 );
@@ -66,8 +66,36 @@ create table if not exists learning_task (
   constraint fk_mysql_task_course foreign key (course_id) references course(id) on delete cascade
 );
 create table if not exists task_submission (
-  id bigint not null auto_increment primary key, task_id bigint not null, student_name varchar(80) not null, student_no varchar(40) not null, submitted boolean not null default false, submitted_at timestamp null, ai_score int, teacher_score int, answers_json text, report_text text, ai_review text, teacher_comment text,
+  id bigint not null auto_increment primary key, task_id bigint not null, student_name varchar(80) not null, student_no varchar(40) not null, submitted boolean not null default false, submitted_at timestamp null, ai_score int, teacher_score int, answers_json text, report_text text, ai_review text, teacher_comment text, review_status varchar(20) not null default 'SUBMITTED', current_version_no int not null default 0,
   constraint fk_mysql_submission_task foreign key (task_id) references learning_task(id) on delete cascade
+);
+alter table course_resource add column if not exists storage_backend varchar(40);
+alter table course_resource add column if not exists storage_key varchar(500);
+alter table course_resource add column if not exists file_size bigint;
+alter table task_submission add column if not exists review_status varchar(20) not null default 'SUBMITTED';
+alter table task_submission add column if not exists current_version_no int not null default 0;
+create table if not exists submission_version (
+  id bigint not null auto_increment primary key, submission_id bigint not null, version_no int not null, report_text text, attachment_json text, ai_score int, ai_review text, created_at timestamp not null,
+  unique key uq_mysql_submission_version (submission_id, version_no),
+  constraint fk_mysql_version_submission foreign key (submission_id) references task_submission(id) on delete cascade
+);
+create table if not exists course_enrollment (
+  id bigint not null auto_increment primary key, course_id bigint not null, student_id bigint not null, active boolean not null default true, joined_at timestamp not null,
+  unique key uq_mysql_course_student (course_id, student_id),
+  constraint fk_mysql_enrollment_course foreign key (course_id) references course(id) on delete cascade,
+  constraint fk_mysql_enrollment_student foreign key (student_id) references user_account(id) on delete cascade
+);
+create table if not exists course_invite_code (
+  id bigint not null auto_increment primary key, course_id bigint not null, invite_code varchar(20) not null unique, enabled boolean not null default true, expires_at timestamp null, created_at timestamp not null,
+  constraint fk_mysql_invite_course foreign key (course_id) references course(id) on delete cascade
+);
+create table if not exists user_notification (
+  id bigint not null auto_increment primary key, user_id bigint not null, notification_type varchar(30) not null, title varchar(220) not null, content varchar(1000) not null, source_type varchar(40), source_id bigint, is_read boolean not null default false, created_at timestamp not null,
+  constraint fk_mysql_notification_user foreign key (user_id) references user_account(id) on delete cascade
+);
+create table if not exists rubric_template (
+  id bigint not null auto_increment primary key, teacher_id bigint not null, name varchar(160) not null, dimensions_json text not null, enabled boolean not null default true, version_no int not null default 1, created_at timestamp not null, updated_at timestamp not null,
+  constraint fk_mysql_rubric_teacher foreign key (teacher_id) references user_account(id) on delete cascade
 );
 create table if not exists teaching_alert (
   id bigint not null auto_increment primary key, teacher_id bigint not null, title varchar(240) not null, summary varchar(500) not null, target_name varchar(160) not null, level varchar(20) not null, status varchar(20) not null, analysis text not null, evidence text, proposal text, created_at timestamp not null,
@@ -82,9 +110,11 @@ create table if not exists assistant_message (
   constraint fk_mysql_assistant_message_session foreign key (session_id) references assistant_session(id) on delete cascade
 );
 create table if not exists conversation (
-  id bigint not null auto_increment primary key, teacher_id bigint not null, contact_name varchar(120) not null, contact_type varchar(20) not null, avatar_text varchar(10), unread_count int not null default 0, updated_at timestamp not null,
-  constraint fk_mysql_conversation_teacher foreign key (teacher_id) references user_account(id) on delete cascade
+  id bigint not null auto_increment primary key, teacher_id bigint not null, student_id bigint, contact_name varchar(120) not null, contact_type varchar(20) not null, avatar_text varchar(10), unread_count int not null default 0, updated_at timestamp not null,
+  constraint fk_mysql_conversation_teacher foreign key (teacher_id) references user_account(id) on delete cascade,
+  constraint fk_mysql_conversation_student foreign key (student_id) references user_account(id) on delete set null
 );
+alter table conversation add column if not exists student_id bigint;
 create table if not exists conversation_message (
   id bigint not null auto_increment primary key, conversation_id bigint not null, sender varchar(20) not null, title varchar(220), content text not null, created_at timestamp not null,
   constraint fk_mysql_conversation_message_conversation foreign key (conversation_id) references conversation(id) on delete cascade

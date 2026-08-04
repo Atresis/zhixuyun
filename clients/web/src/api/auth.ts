@@ -6,4 +6,6 @@ export const authApi = {
     apiRequest<LoginResponse>("/auth/login", { method: "POST", ...jsonBody({ loginName: account, account, password }) }),
   me: () => apiRequest<AuthUser>("/auth/me"),
   logout: () => apiRequest<void>("/auth/logout", { method: "POST" }),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    apiRequest<void>("/auth/change-password", { method: "POST", ...jsonBody({ oldPassword, newPassword }) }),
 };

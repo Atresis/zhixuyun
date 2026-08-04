@@ -82,6 +82,18 @@ class AdminControllerTest {
     }
 
     @Test
+    void adminCanSearchAuditLogs() throws Exception {
+        jdbc.update("insert into audit_log(actor_id,action,target_type,target_id,detail,created_at) values (?,?,?,?,?,current_timestamp)",
+                teacherId, "UPDATE_COURSE", "COURSE", "42", "日志检索唯一标记");
+        mvc.perform(get("/api/v1/admin/logs")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("keyword", "日志检索唯一标记"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].action").value("UPDATE_COURSE"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
     void batchImportStudentsCreatesProfiles() throws Exception {
         long classId = insertAdministrativeClass("2026级软件工程1班", "2026");
         MockMultipartFile file = new MockMultipartFile(

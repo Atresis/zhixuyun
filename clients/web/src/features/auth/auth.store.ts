@@ -63,6 +63,11 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    await authApi.changePassword(oldPassword, newPassword);
+    clearSession();
+  }
+
   function clearSession(): void {
     clearToken();
     clearStoredUser();
@@ -76,5 +81,5 @@ export const useAuthStore = defineStore("auth", () => {
 
   setUnauthorizedHandler(clearSession);
 
-  return { user, initialized, loading, error, isAuthenticated, login, restore, logout, clearSession, destination };
+  return { user, initialized, loading, error, isAuthenticated, login, restore, logout, changePassword, clearSession, destination };
 });

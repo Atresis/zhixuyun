@@ -49,6 +49,21 @@ export const useStudentStore = defineStore("student", () => {
     workspace.value = await studentApi.submitFile(taskId, file);
   }
 
+  async function joinCourse(code: string) {
+    await studentApi.joinCourse(code);
+    await reload();
+  }
+
+  async function readNotification(id: number) {
+    await studentApi.readNotification(id);
+    await reload();
+  }
+
+  async function readAllNotifications() {
+    await studentApi.readAllNotifications();
+    await reload();
+  }
+
   async function askAssistant(content: string) {
     const prompt = content.trim();
     if (!prompt || assistantBusy.value) return;
@@ -86,6 +101,9 @@ export const useStudentStore = defineStore("student", () => {
     reload,
     submitText,
     submitFile,
+    joinCourse,
+    readNotification,
+    readAllNotifications,
     askAssistant,
     taskCourse,
   };

@@ -560,6 +560,107 @@ paths:
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
       responses:
         '200': { description: 保存平台设置 }
+  /student/courses/join:
+    post:
+      operationId: joinStudentCourse
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [code], properties: { code: { type: string } } } } }
+      responses:
+        '200': { description: 已通过邀请码加入课程 }
+        '404': { description: 邀请码无效或已停用 }
+  /admin/logs:
+    get:
+      operationId: listAdminAuditLogs
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, default: 20 } }
+        - { name: keyword, in: query, schema: { type: string } }
+      responses:
+        '200': { description: 管理操作日志分页结果 }
+  /submissions/{submissionId}/versions:
+    get:
+      operationId: listSubmissionVersions
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: submissionId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: 当前学生或任课教师可见的报告版本历史 }
+  /teacher/courses/{courseId}/invite-code:
+    get:
+      operationId: getCourseInviteCode
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: courseId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: 当前有效邀请码 }
+    post:
+      operationId: regenerateCourseInviteCode
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: courseId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: 已重新生成 30 天有效的邀请码 }
+  /teacher/submissions/{submissionId}/return:
+    post:
+      operationId: returnSubmissionForRevision
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: submissionId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, properties: { reason: { type: string } } } } }
+      responses:
+        '200': { description: 已退回，学生可以提交新版本 }
+  /teacher/tasks/{taskId}/analytics:
+    get:
+      operationId: getTaskAnalytics
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: 提交、待批和成绩分布统计 }
+  /teacher/rubrics:
+    get:
+      operationId: listRubrics
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 当前教师评价模板 }
+    post:
+      operationId: createRubric
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 已创建评价模板 }
+  /teacher/rubrics/{id}:
+    put:
+      operationId: updateRubric
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: 已创建模板新版本 }
+  /teacher/rubrics/{id}/status:
+    patch:
+      operationId: setRubricStatus
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '200': { description: 已更新模板状态 }
+  /notifications:
+    get:
+      operationId: listNotifications
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 当前账号通知 }
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, format: int64 } }]
+      responses:
+        '204': { description: 已读 }
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 全部已读 }
 components:
   securitySchemes:
     bearerAuth:

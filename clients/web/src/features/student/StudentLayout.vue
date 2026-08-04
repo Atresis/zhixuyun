@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
-import { Bell, ClipboardList, House, LogOut, MessageCircleMore, ScrollText } from "@lucide/vue";
+import { Bell, BookOpen, ClipboardList, House, LogOut, MessageCircleMore, ScrollText } from "@lucide/vue";
 import { useAuthStore } from "../auth/auth.store";
 import { useStudentStore } from "./student.store";
 import "./student.css";
@@ -36,6 +36,7 @@ async function logout() {
       <nav class="student-nav">
         <RouterLink class="student-nav-link" to="/student/dashboard"><House :size="18" />学生首页</RouterLink>
         <RouterLink class="student-nav-link" to="/student/tasks"><ClipboardList :size="18" />实验任务</RouterLink>
+        <RouterLink class="student-nav-link" to="/student/courses"><BookOpen :size="18" />我的课程</RouterLink>
         <RouterLink class="student-nav-link" to="/student/reports"><ScrollText :size="18" />我的报告</RouterLink>
         <RouterLink class="student-nav-link" to="/student/assistant"><MessageCircleMore :size="18" />AI 问答</RouterLink>
         <RouterLink class="student-nav-link" to="/student/notifications"><Bell :size="18" />消息通知</RouterLink>

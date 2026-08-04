@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
-import { BookOpen, Building2, ChevronRight, CircleHelp, GraduationCap, LayoutDashboard, LogOut, Menu, Settings2, SlidersHorizontal, Sun, UsersRound, X } from "@lucide/vue";
+import { BookOpen, Building2, ChevronRight, CircleHelp, FileClock, GraduationCap, LayoutDashboard, LogOut, Menu, SlidersHorizontal, Sun, UsersRound, X } from "@lucide/vue";
 import { useAuthStore } from "../auth/auth.store";
 
 const auth = useAuthStore();
@@ -38,6 +38,7 @@ async function logout() { await auth.logout(); await router.replace("/login"); }
         <RouterLink to="/admin/teachers"><GraduationCap :size="18" /><span>教师管理</span></RouterLink>
         <RouterLink to="/admin/courses"><BookOpen :size="18" /><span>课程管理</span></RouterLink>
         <RouterLink to="/admin/classes"><Building2 :size="18" /><span>班级管理</span></RouterLink>
+        <RouterLink to="/admin/logs"><FileClock :size="18" /><span>操作日志</span></RouterLink>
         <RouterLink to="/admin/settings"><SlidersHorizontal :size="18" /><span>系统设置</span></RouterLink>
       </nav>
       <div class="admin-sidebar-foot"><span>{{ sideSummary[0] }}</span><strong>{{ sideSummary[1] }}</strong></div>

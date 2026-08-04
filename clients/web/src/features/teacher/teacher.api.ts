@@ -1,5 +1,5 @@
 import { apiDownload, apiRequest, jsonBody } from "../../api/client";
-import type { AssistantSession, ContactCandidatePage, Conversation, LearningTask, Resource, Submission, TeacherProfile, TeacherWorkspace, TeachingAlert } from "./teacher.types";
+import type { AssistantSession, ContactCandidatePage, Conversation, InviteCode, LearningTask, Resource, RubricDimension, RubricTemplate, Submission, TaskAnalytics, TeacherProfile, TeacherWorkspace, TeachingAlert } from "./teacher.types";
 
 export const teacherApi = {
   workspace: () => apiRequest<TeacherWorkspace>("/teacher/workspace"),
@@ -15,6 +15,14 @@ export const teacherApi = {
   updateTask: (id: number, body: Partial<LearningTask>) => apiRequest<LearningTask>(`/teacher/tasks/${id}`, { method: "PATCH", ...jsonBody(body) }),
   updateQuestions: (id: number, questions: LearningTask["questions"]) => apiRequest<LearningTask>(`/teacher/tasks/${id}/questions`, { method: "PUT", ...jsonBody(questions) }),
   grade: (id: number, body: { teacherScore: number; teacherComment: string }) => apiRequest<Submission>(`/teacher/submissions/${id}/grade`, { method: "PUT", ...jsonBody(body) }),
+  returnSubmission: (id: number, reason: string) => apiRequest<Submission>(`/teacher/submissions/${id}/return`, { method: "POST", ...jsonBody({ reason }) }),
+  inviteCode: (courseId: number) => apiRequest<InviteCode>(`/teacher/courses/${courseId}/invite-code`),
+  regenerateInviteCode: (courseId: number) => apiRequest<InviteCode>(`/teacher/courses/${courseId}/invite-code`, { method: "POST" }),
+  analytics: (taskId: number) => apiRequest<TaskAnalytics>(`/teacher/tasks/${taskId}/analytics`),
+  rubrics: () => apiRequest<RubricTemplate[]>("/teacher/rubrics"),
+  createRubric: (name: string, dimensions: RubricDimension[]) => apiRequest<RubricTemplate>("/teacher/rubrics", { method: "POST", ...jsonBody({ name, dimensions }) }),
+  updateRubric: (id: number, name: string, dimensions: RubricDimension[]) => apiRequest<RubricTemplate>(`/teacher/rubrics/${id}`, { method: "PUT", ...jsonBody({ name, dimensions }) }),
+  setRubricEnabled: (id: number, enabled: boolean) => apiRequest<RubricTemplate>(`/teacher/rubrics/${id}/status`, { method: "PATCH", ...jsonBody({ enabled }) }),
   readAlert: (id: number) => apiRequest<TeachingAlert>(`/teacher/alerts/${id}/read`, { method: "PATCH" }),
   saveProposal: (id: number, proposal: string) => apiRequest<TeachingAlert>(`/teacher/alerts/${id}/proposal`, { method: "PUT", ...jsonBody({ proposal }) }),
   newAssistantSession: () => apiRequest<AssistantSession>("/teacher/assistant/sessions", { method: "POST" }),

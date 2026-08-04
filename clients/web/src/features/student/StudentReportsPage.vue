@@ -1,7 +1,15 @@
 <script setup lang="ts">
+import { ref } from "vue";
+import { studentApi } from "./student.api";
 import { useStudentStore } from "./student.store";
+import type { SubmissionVersion } from "./student.types";
 
 const student = useStudentStore();
+const versions = ref<Record<number, SubmissionVersion[]>>({});
+async function toggleVersions(submissionId: number) {
+  if (versions.value[submissionId]) { delete versions.value[submissionId]; return; }
+  versions.value[submissionId] = await studentApi.versions(submissionId);
+}
 </script>
 
 <template>
@@ -22,6 +30,10 @@ const student = useStudentStore();
           </div>
           <p v-if="report.aiReview"><strong>AI 初评：</strong>{{ report.aiReview }}</p>
           <p v-if="report.teacherComment"><strong>教师评语：</strong>{{ report.teacherComment }}</p>
+          <button class="student-secondary-button" @click="toggleVersions(report.submissionId)">{{ versions[report.submissionId] ? "收起版本" : `查看版本历史（${report.currentVersionNo || 1}）` }}</button>
+          <div v-if="versions[report.submissionId]" class="student-version-list">
+            <article v-for="version in versions[report.submissionId]" :key="version.id"><strong>V{{ version.versionNo }}</strong><span>{{ version.createdAt.slice(0, 16).replace("T", " ") }} · AI {{ version.aiScore ?? "--" }}</span><p>{{ version.reportText || version.attachment?.fileName || "文件报告" }}</p></article>
+          </div>
         </article>
       </div>
       <div v-else class="student-empty">暂时还没有报告提交记录。</div>

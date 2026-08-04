@@ -49,7 +49,9 @@ export type StudentTask = {
   teacherComment?: string | null;
   reportText?: string | null;
   attachment: StudentTaskAttachment;
-  submissionStatus: "待提交" | "已提交" | "AI 初评完成" | "教师已复核";
+  reviewStatus?: "SUBMITTED" | "RETURNED" | "PUBLISHED";
+  currentVersionNo?: number;
+  submissionStatus: "待提交" | "已提交" | "AI 初评完成" | "教师已复核" | "已退回";
 };
 
 export type StudentReport = {
@@ -65,15 +67,23 @@ export type StudentReport = {
   teacherComment?: string | null;
   reportText?: string | null;
   attachment: StudentTaskAttachment;
+  reviewStatus?: "SUBMITTED" | "RETURNED" | "PUBLISHED";
+  currentVersionNo?: number;
 };
 
 export type StudentNotification = {
   id: number;
-  type: "TASK" | "AI" | "REVIEW";
+  type: "TASK" | "AI" | "REVIEW" | "COURSE";
   title: string;
   content: string;
   createdAt: string;
-  status: "TODO" | "INFO" | "DONE";
+  status?: "TODO" | "INFO" | "DONE";
+  read?: boolean;
+};
+
+export type SubmissionVersion = {
+  id: number; versionNo: number; reportText: string | null; attachment: StudentTaskAttachment;
+  aiScore: number | null; aiReview: string | null; createdAt: string;
 };
 
 export type StudentWorkspace = {

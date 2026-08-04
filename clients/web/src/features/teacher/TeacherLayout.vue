@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
-import { BookOpen, CircleHelp, LayoutDashboard, MessageSquare, Moon, Sparkles, Sun, TriangleAlert } from "@lucide/vue";
+import { BarChart3, BookOpen, CircleHelp, ClipboardCheck, ClipboardList, LayoutDashboard, ListChecks, MessageSquare, Moon, Sparkles, Sun, TriangleAlert } from "@lucide/vue";
 import { useAuthStore } from "../auth/auth.store";
 import { useTeacherStore } from "./teacher.store";
 import TeacherModal from "./TeacherModal.vue";
@@ -31,6 +31,10 @@ async function logout() { await auth.logout(); await router.replace("/login"); }
       <nav>
         <RouterLink class="nav-link" to="/teacher/dashboard"><LayoutDashboard :size="18" /><span>首页</span></RouterLink>
         <RouterLink class="nav-link" to="/teacher/courses"><BookOpen :size="18" /><span>课程管理</span></RouterLink>
+        <RouterLink class="nav-link" to="/teacher/tasks"><ClipboardList :size="18" /><span>实验任务</span></RouterLink>
+        <RouterLink class="nav-link" to="/teacher/review"><ClipboardCheck :size="18" /><span>报告批阅</span></RouterLink>
+        <RouterLink class="nav-link" to="/teacher/analytics"><BarChart3 :size="18" /><span>班级分析</span></RouterLink>
+        <RouterLink class="nav-link" to="/teacher/rubrics"><ListChecks :size="18" /><span>评价模板</span></RouterLink>
         <RouterLink class="nav-link" to="/teacher/assistant"><Sparkles :size="18" /><span>AI 教学助手</span></RouterLink>
         <RouterLink class="nav-link" to="/teacher/alerts"><TriangleAlert :size="18" /><span>AI 教学预警</span><em v-if="teacher.unreadAlerts" class="badge">{{ teacher.unreadAlerts }}</em></RouterLink>
         <RouterLink class="nav-link" to="/teacher/messages"><MessageSquare :size="18" /><span>消息通知</span><em v-if="teacher.unreadMessages" class="badge">{{ teacher.unreadMessages }}</em></RouterLink>

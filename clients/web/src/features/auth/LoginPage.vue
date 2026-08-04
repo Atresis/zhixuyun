@@ -49,7 +49,7 @@ async function submit() {
   if (captcha.value.trim().toUpperCase() !== captchaCode.value) { message.value = "验证码不正确，请重新输入"; refreshCaptcha(); return; }
   try {
     const user = await auth.login(account.value, password.value, remember.value);
-    const redirect = typeof route.query.redirect === "string" ? route.query.redirect : homeForRole(user.role);
+    const redirect = user.mustChangePassword ? "/change-password" : typeof route.query.redirect === "string" ? route.query.redirect : homeForRole(user.role);
     await router.replace(redirect);
   } catch (error) { message.value = errorText(error); refreshCaptcha(); }
 }

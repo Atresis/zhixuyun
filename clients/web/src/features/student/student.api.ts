@@ -1,5 +1,5 @@
 import { apiRequest, jsonBody } from "../../api/client";
-import type { StudentAssistantReply, StudentWorkspace } from "./student.types";
+import type { StudentAssistantReply, StudentCourse, StudentWorkspace, SubmissionVersion } from "./student.types";
 
 export const studentApi = {
   workspace: () => apiRequest<StudentWorkspace>("/student/workspace"),
@@ -12,4 +12,8 @@ export const studentApi = {
   },
   askAssistant: (content: string) =>
     apiRequest<StudentAssistantReply>("/student/assistant/ask", { method: "POST", ...jsonBody({ content }) }),
+  joinCourse: (code: string) => apiRequest<StudentCourse>("/student/courses/join", { method: "POST", ...jsonBody({ code }) }),
+  versions: (submissionId: number) => apiRequest<SubmissionVersion[]>(`/submissions/${submissionId}/versions`),
+  readNotification: (id: number) => apiRequest<void>(`/notifications/${id}/read`, { method: "PATCH" }),
+  readAllNotifications: () => apiRequest<{ updated: number }>("/notifications/read-all", { method: "POST" }),
 };
