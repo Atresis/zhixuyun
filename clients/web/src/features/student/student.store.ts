@@ -1,7 +1,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { studentApi } from "./student.api";
-import type { StudentChatMessage, StudentTask, StudentWorkspace } from "./student.types";
+import type { StudentAssistantSession, StudentChatMessage, StudentConversation, StudentTask, StudentWorkspace } from "./student.types";
 
 export const useStudentStore = defineStore("student", () => {
   const workspace = ref<StudentWorkspace | null>(null);
@@ -9,11 +9,15 @@ export const useStudentStore = defineStore("student", () => {
   const error = ref("");
   const assistantBusy = ref(false);
   const messages = ref<StudentChatMessage[]>([]);
+  const activeAssistantSessionId = ref<number | null>(null);
 
   const tasks = computed(() => workspace.value?.tasks || []);
   const courses = computed(() => workspace.value?.courses || []);
   const reports = computed(() => workspace.value?.reports || []);
   const notifications = computed(() => workspace.value?.notifications || []);
+  const assistantSessions = computed<StudentAssistantSession[]>(() => workspace.value?.assistantSessions || []);
+  const conversations = computed<StudentConversation[]>(() => workspace.value?.conversations || []);
+  const teacherContacts = computed(() => workspace.value?.teacherContacts || []);
   const profile = computed(() => workspace.value?.profile || null);
   const metrics = computed(() => workspace.value?.metrics || { pendingTaskCount: 0, submittedCount: 0, aiReadyCount: 0, reviewedCount: 0 });
   const pendingTasks = computed(() => tasks.value.filter((task) => task.submissionStatus === "待提交"));
@@ -49,6 +53,10 @@ export const useStudentStore = defineStore("student", () => {
     workspace.value = await studentApi.submitFile(taskId, file);
   }
 
+  async function submitAnswers(taskId: number, answers: Record<string, string | string[]>) {
+    workspace.value = await studentApi.submitAnswers(taskId, answers);
+  }
+
   async function joinCourse(code: string) {
     await studentApi.joinCourse(code);
     await reload();
@@ -79,6 +87,47 @@ export const useStudentStore = defineStore("student", () => {
     }
   }
 
+  async function createAssistantSession() {
+    const session = await studentApi.createAssistantSession();
+    if (workspace.value) workspace.value.assistantSessions = [session, ...(workspace.value.assistantSessions || [])];
+    activeAssistantSessionId.value = session.id;
+    return session;
+  }
+
+  async function sendAssistantMessage(sessionId: number, content: string) {
+    const session = await studentApi.sendAssistantMessage(sessionId, content);
+    if (workspace.value) {
+      const current = workspace.value.assistantSessions || [];
+      workspace.value.assistantSessions = [session, ...current.filter((item) => item.id !== session.id)];
+    }
+    activeAssistantSessionId.value = session.id;
+    return session;
+  }
+
+  async function createConversation(teacherId: number, content: string) {
+    const conversation = await studentApi.createConversation(teacherId, content);
+    if (workspace.value) {
+      workspace.value.conversations = [conversation, ...(workspace.value.conversations || []).filter((item) => item.id !== conversation.id)];
+    }
+    return conversation;
+  }
+
+  async function sendConversationMessage(id: number, content: string) {
+    const conversation = await studentApi.sendConversationMessage(id, content);
+    if (workspace.value) {
+      workspace.value.conversations = [conversation, ...(workspace.value.conversations || []).filter((item) => item.id !== conversation.id)];
+    }
+    return conversation;
+  }
+
+  async function readConversation(id: number) {
+    const conversation = await studentApi.readConversation(id);
+    if (workspace.value) {
+      workspace.value.conversations = [conversation, ...(workspace.value.conversations || []).filter((item) => item.id !== conversation.id)];
+    }
+    return conversation;
+  }
+
   function taskCourse(task: StudentTask) {
     return courses.value.find((course) => course.id === task.courseId);
   }
@@ -89,10 +138,14 @@ export const useStudentStore = defineStore("student", () => {
     error,
     assistantBusy,
     messages,
+    activeAssistantSessionId,
     tasks,
     courses,
     reports,
     notifications,
+    assistantSessions,
+    conversations,
+    teacherContacts,
     profile,
     metrics,
     pendingTasks,
@@ -101,10 +154,16 @@ export const useStudentStore = defineStore("student", () => {
     reload,
     submitText,
     submitFile,
+    submitAnswers,
     joinCourse,
     readNotification,
     readAllNotifications,
     askAssistant,
+    createAssistantSession,
+    sendAssistantMessage,
+    createConversation,
+    sendConversationMessage,
+    readConversation,
     taskCourse,
   };
 });

@@ -13,7 +13,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import("../features/teacher/TeacherLayout.vue"),
     redirect: "/teacher/dashboard",
     children: [
-      { path: "dashboard", name: "teacher-dashboard", component: () => import("../features/teacher/TeacherDashboardPage.vue"), meta: { title: "首页", role: "TEACHER" as Role } },
+      { path: "dashboard", name: "teacher-dashboard", component: () => import("../features/teacher/TeacherDashboardPage.vue"), meta: { title: "教师首页", role: "TEACHER" as Role } },
       { path: "courses", name: "teacher-courses", component: () => import("../features/teacher/TeacherCoursesPage.vue"), meta: { title: "课程管理", role: "TEACHER" as Role } },
       { path: "tasks", name: "teacher-tasks", component: () => import("../features/teacher/TeacherTasksPage.vue"), meta: { title: "实验任务", role: "TEACHER" as Role } },
       { path: "review", name: "teacher-review", component: () => import("../features/teacher/TeacherReviewPage.vue"), meta: { title: "报告批阅", role: "TEACHER" as Role } },
@@ -46,12 +46,14 @@ const routes: RouteRecordRaw[] = [
     component: () => import("../features/student/StudentLayout.vue"),
     redirect: "/student/dashboard",
     children: [
-      { path: "dashboard", name: "student-dashboard", component: () => import("../features/student/StudentDashboardPage.vue"), meta: { title: "学生首页", role: "STUDENT" as Role } },
-      { path: "tasks", name: "student-tasks", component: () => import("../features/student/StudentTasksPage.vue"), meta: { title: "实验任务", role: "STUDENT" as Role } },
-      { path: "courses", name: "student-courses", component: () => import("../features/student/StudentCoursesPage.vue"), meta: { title: "我的课程", role: "STUDENT" as Role } },
-      { path: "reports", name: "student-reports", component: () => import("../features/student/StudentReportsPage.vue"), meta: { title: "我的报告", role: "STUDENT" as Role } },
+      { path: "dashboard", redirect: "/student/courses" },
+      { path: "courses", name: "student-courses", component: () => import("../features/student/StudentCoursesPage.vue"), meta: { title: "课程首页", role: "STUDENT" as Role } },
+      { path: "courses/:courseId", name: "student-course-detail", component: () => import("../features/student/StudentCourseDetailPage.vue"), meta: { title: "课程详情", role: "STUDENT" as Role } },
+      { path: "tasks", redirect: "/student/courses" },
+      { path: "reports", redirect: "/student/courses" },
       { path: "assistant", name: "student-assistant", component: () => import("../features/student/StudentAssistantPage.vue"), meta: { title: "AI 问答", role: "STUDENT" as Role } },
-      { path: "notifications", name: "student-notifications", component: () => import("../features/student/StudentNotificationsPage.vue"), meta: { title: "消息通知", role: "STUDENT" as Role } },
+      { path: "messages", name: "student-messages", component: () => import("../features/student/StudentMessagesPage.vue"), meta: { title: "消息通知", role: "STUDENT" as Role } },
+      { path: "notifications", redirect: "/student/messages" },
     ],
   },
   { path: "/:pathMatch(.*)*", redirect: "/login" },
@@ -65,7 +67,6 @@ router.beforeEach(async (to) => {
   if (to.meta.public) return auth.user ? homeForRole(auth.user.role) : true;
   if (!auth.user) return { name: "login", query: { redirect: to.fullPath } };
   if (auth.user.mustChangePassword && to.name !== "change-password") return { name: "change-password" };
-  if (!auth.user.mustChangePassword && to.name === "change-password") return homeForRole(auth.user.role);
   const requiredRole = to.meta.role as Role | undefined;
   if (requiredRole && requiredRole !== auth.user.role) return homeForRole(auth.user.role);
   return true;

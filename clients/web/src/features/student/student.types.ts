@@ -23,6 +23,25 @@ export type StudentCourse = {
   scheduleText: string;
   teacherName: string;
   color: string;
+  resources?: StudentResource[];
+};
+
+export type StudentResource = {
+  id: number;
+  kind: "MATERIAL" | "QUESTION_BANK" | string;
+  name: string;
+  sourceLabel?: string;
+  contentType?: string;
+  fileSize?: number | null;
+  createdAt?: string;
+};
+
+export type StudentQuestion = {
+  id: number;
+  type: "SINGLE" | "MULTIPLE" | "TRUE_FALSE" | "FILL" | "SHORT" | string;
+  title: string;
+  options?: string[];
+  score?: number;
 };
 
 export type StudentTaskAttachment = {
@@ -52,6 +71,8 @@ export type StudentTask = {
   reviewStatus?: "SUBMITTED" | "RETURNED" | "PUBLISHED";
   currentVersionNo?: number;
   submissionStatus: "待提交" | "已提交" | "AI 初评完成" | "教师已复核" | "已退回";
+  questions?: StudentQuestion[];
+  answers?: Record<string, string | string[]>;
 };
 
 export type StudentReport = {
@@ -94,7 +115,15 @@ export type StudentWorkspace = {
   reports: StudentReport[];
   notifications: StudentNotification[];
   assistantPrompts: string[];
+  assistantSessions?: StudentAssistantSession[];
+  conversations?: StudentConversation[];
+  teacherContacts?: StudentTeacherContact[];
 };
 
 export type StudentAssistantReply = { answer: string };
 export type StudentChatMessage = { role: "user" | "assistant"; content: string };
+export type StudentAssistantMessage = { id: number; role: "USER" | "ASSISTANT"; content: string; createdAt: string };
+export type StudentAssistantSession = { id: number; title: string; createdAt: string; updatedAt: string; messages: StudentAssistantMessage[] };
+export type StudentTeacherContact = { id: number; name: string; courseName: string };
+export type StudentConversationMessage = { id: number; sender: "STUDENT" | "TEACHER" | string; title?: string | null; content: string; createdAt: string };
+export type StudentConversation = { id: number; teacherId: number; contactName: string; avatarText: string; unreadCount: number; updatedAt: string; messages: StudentConversationMessage[] };

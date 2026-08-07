@@ -9,6 +9,13 @@ export type AuthUser = {
   mustChangePassword: boolean;
 };
 
+export type UserProfile = AuthUser & {
+  email: string;
+  phone: string;
+  bio: string;
+  hasAvatar: boolean;
+};
+
 export type LoginResponse = {
   token: string;
   user: AuthUser;

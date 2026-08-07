@@ -58,6 +58,10 @@ export const useAdminStore = defineStore("admin", () => {
     settings.value = await adminApi.saveSettings(settings.value);
   }
 
+  async function publishAnnouncement(body: { scope: string; level: string; title: string; content: string }) {
+    return adminApi.publishAnnouncement(body);
+  }
+
   async function createUser(body: Record<string, unknown>) {
     const item = await adminApi.createUser(body);
     await loadUsers();
@@ -184,6 +188,7 @@ export const useAdminStore = defineStore("admin", () => {
     loadClasses,
     loadSettings,
     saveSettings,
+    publishAnnouncement,
     createUser,
     updateUser,
     toggleUser,

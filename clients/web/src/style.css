@@ -13,11 +13,11 @@ button { cursor: pointer; }
 .login-page { display: grid; grid-template-columns: minmax(470px, 56%) minmax(440px, 44%); min-height: 100vh; overflow: hidden; }
 .brand-panel { position: relative; isolation: isolate; min-height: 680px; overflow: hidden; color: #fff; background: #0d4338; }
 .brand-lockup { position: absolute; top: 44px; left: 58px; display: flex; align-items: center; gap: 13px; z-index: 2; }
-.brand-symbol { width: 47px; height: 47px; display: grid; place-items: center; color: #d4fff0; border: 1px solid #276558; border-radius: 9px; }
+.brand-symbol { width: 47px; height: 47px; display: block; border-radius: 9px; }
 .brand-lockup strong { display: block; font-size: 21px; line-height: 1.2; }
 .brand-lockup small { display: block; margin-top: 4px; color: #b4d5cd; font-size: 12px; }
-.brand-content { position: absolute; z-index: 2; top: 40.8%; left: clamp(42px, 7vw, 82px); max-width: 570px; }
-.brand-content h1 { margin: 0; font-size: clamp(37px, 3.5vw, 54px); line-height: 1.18; letter-spacing: 0; }
+.brand-content { position: absolute; z-index: 2; top: 40.8%; left: 58px; max-width: 570px; }
+.brand-content h1 { margin: 0; font-size: 48px; font-weight: 700; line-height: 1.18; letter-spacing: 0; }
 .brand-content p { max-width: 530px; margin: 21px 0 0; color: #c7e1db; font-size: 16px; line-height: 1.9; }
 .circuit-line { position: absolute; z-index: -1; height: 1px; background: #2a6257; opacity: .8; }
 .circuit-line i { position: absolute; width: 15px; height: 15px; border: 2px solid #2b7163; border-radius: 50%; background: #0d4338; }
@@ -32,9 +32,9 @@ button { cursor: pointer; }
 .school-mark, .copyright { position: absolute; bottom: 38px; color: #79afa2; font-size: 12px; }.school-mark { left: 58px; }.copyright { right: 58px; }
 
 .signin-panel { display: grid; place-items: center; padding: 46px 48px; background: #fff; }
-.signin-form { width: min(420px, 100%); }
+.signin-form { width: min(420px, 100%); transform: translateY(27px); }
 .entry-note { display: flex; align-items: center; gap: 9px; margin: 0 0 38px; color: #667a75; font-size: 13px; }.entry-note span { width: 8px; height: 8px; border-radius: 50%; background: #07866d; }
-.signin-form h2 { margin: 0; color: #12362f; font-size: 32px; line-height: 1.25; }.intro { margin: 11px 0 30px; color: #647974; font-size: 14px; }
+.signin-form h2 { margin: 0; color: #12362f; font-size: 30px; font-weight: 700; line-height: 1.25; }.intro { margin: 11px 0 30px; color: #647974; font-size: 14px; }
 label { display: block; margin-top: 19px; color: #264a42; font-size: 14px; font-weight: 700; }.field-control { display: flex; align-items: center; gap: 12px; height: 50px; margin-top: 8px; padding: 0 13px; color: #81948f; border: 1px solid #cfdbd7; border-radius: 8px; background: #fff; transition: border-color .2s, box-shadow .2s; }.field-control:focus-within { border-color: #098970; box-shadow: 0 0 0 3px #e3f5f0; }.field-control input { width: 100%; min-width: 0; height: 100%; border: 0; outline: 0; color: #183630; background: transparent; font-size: 14px; }.field-control input::placeholder { color: #9aa9a5; font-weight: 500; }.icon-button, .refresh-button { display: grid; flex: none; place-items: center; padding: 0; color: #668079; border: 0; background: transparent; }
 .captcha-row { display: grid; grid-template-columns: minmax(0, 1fr) 141px 44px; gap: 9px; margin-top: 8px; }.captcha-row .field-control { margin-top: 0; }.captcha-code { position: relative; display: flex; align-items: center; justify-content: space-evenly; overflow: hidden; min-width: 0; border: 1px solid #cfdbd7; border-radius: 8px; color: #195b51; background: repeating-linear-gradient(-18deg, #eff9f5 0 2px, #d6ece5 2px 3px, #f9fbfa 3px 19px); }.captcha-code::after { position: absolute; top: 50%; left: -5%; width: 110%; height: 1px; background: #0f7563; content: ""; transform: rotate(-11deg); }.captcha-code b { position: relative; z-index: 1; color: #235f55; font-size: 23px; }.captcha-code b:nth-child(2) { color: #813d45; }.captcha-code b:nth-child(3) { color: #1d6979; }.captcha-code b:nth-child(4) { color: #9a6334; }.refresh-button { height: 50px; border: 1px solid #cfdbd7; border-radius: 8px; }.refresh-button:hover { color: #087f68; border-color: #84bcb0; }
 .login-button { width: 100%; min-height: 50px; margin-top: 20px; border: 0; border-radius: 8px; color: #fff; background: #07876e; font-weight: 700; transition: background .2s, transform .2s; }.login-button:hover:not(:disabled) { background: #056f5b; }.login-button:active:not(:disabled) { transform: translateY(1px); }.login-button:disabled { cursor: wait; opacity: .75; }.form-message { margin: 13px 0 -6px; color: #c04b46; font-size: 13px; }.consent { margin: 7px 0 38px; color: #6d817c; text-align: center; font-size: 13px; }.consent button { padding: 0; color: #087b67; border: 0; border-bottom: 1px solid #087b67; background: transparent; }.form-footer { padding-top: 20px; color: #84938f; border-top: 1px solid #e0e7e4; text-align: center; font-size: 12px; }
@@ -50,7 +50,7 @@ label { display: block; margin-top: 19px; color: #264a42; font-size: 14px; font-
 .circuit-line.line-two { top: 24%; left: 61%; width: 42%; }
 .circuit-line.line-three { top: 33%; left: 76%; width: 32%; }
 .circuit-line.line-one i, .circuit-line.line-two i, .circuit-line.line-three i { left: -8px; top: -7px; }
-.book-mark { position: absolute; right: -7%; bottom: -11%; width: 55%; height: 43%; opacity: .25; border: 9px solid #216155; border-bottom: 0; border-radius: 112px 112px 0 0; }
+.book-mark { position: absolute; right: -2%; bottom: -1%; width: 55%; height: 43%; opacity: .25; border: 9px solid #216155; border-bottom: 0; border-radius: 112px 112px 0 0; }
 .book-mark::before { position: absolute; inset: 9px; border: 7px solid #226557; border-bottom: 0; border-radius: 98px 98px 0 0; content: ""; }
 .book-mark .cloud { position: absolute; left: 25%; top: 20%; width: 52%; height: 26%; background: #236356; border-radius: 100px; }
 .book-mark .cloud::before, .book-mark .cloud::after { position: absolute; bottom: 0; border-radius: 50%; background: #236356; content: ""; }
@@ -58,7 +58,7 @@ label { display: block; margin-top: 19px; color: #264a42; font-size: 14px; font-
 .book-left, .book-right { position: absolute; bottom: 8%; width: 46%; height: 42%; border: 8px solid #236356; }.book-left { left: 9%; border-right-width: 4px; border-radius: 85% 0 0 9%; transform: skewY(-10deg); }.book-right { right: 9%; border-left-width: 4px; border-radius: 0 85% 9% 0; transform: skewY(10deg); }
 .remember { display: flex; align-items: center; gap: 8px; margin-top: 15px; color: #6d817c; font-size: 13px; font-weight: 500; }.remember input { width: 15px; height: 15px; accent-color: #07876e; }
 .placeholder-page { min-height: 100vh; display: grid; place-content: center; gap: 10px; padding: 24px; color: #17342f; background: #f3f6f4; text-align: center; }.placeholder-page p { margin: 0; color: #087f68; font-size: 12px; font-weight: 700; letter-spacing: .12em; }.placeholder-page h1 { margin: 0; font-size: 34px; }.placeholder-page span { color: #60716b; }
-@media (max-width: 900px) { .brand-panel { min-height: 290px; } }
+@media (max-width: 900px) { .brand-panel { min-height: 290px; }.signin-form { transform: none; } }
 
 /* Administrator portal */
 .admin-shell { min-height: 100vh; color: #1b2d39; background: #f4f7fb; }

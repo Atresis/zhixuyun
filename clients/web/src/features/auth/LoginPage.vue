@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { BookOpenCheck, Eye, EyeOff, KeyRound, RefreshCw, ShieldCheck, UserRound, X } from "@lucide/vue";
+import { Eye, EyeOff, KeyRound, RefreshCw, ShieldCheck, UserRound, X } from "@lucide/vue";
 import { useRoute, useRouter } from "vue-router";
+import brandLogo from "../../assets/zhixuyun-logo.svg";
 import { useAuthStore } from "./auth.store";
 import { homeForRole } from "./auth.utils";
 import { normalizeAuthError } from "./auth.utils";
@@ -32,7 +33,7 @@ const policySections = computed(() => policyTab.value === "privacy" ? [
 ]);
 
 function makeCaptcha() {
-  const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const chars = "23456789";
   return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 function refreshCaptcha() { captchaCode.value = makeCaptcha(); captcha.value = ""; }
@@ -58,7 +59,7 @@ async function submit() {
 <template>
   <main class="login-page">
     <section class="brand-panel">
-      <div class="brand-lockup"><span class="brand-symbol"><BookOpenCheck :size="28" /></span><span><strong>知序云</strong><small>实验教学平台</small></span></div>
+      <div class="brand-lockup"><img class="brand-symbol" :src="brandLogo" alt="" /><span><strong>知序云</strong><small>实验教学平台</small></span></div>
       <div class="circuit-line line-one"><i /></div><div class="circuit-line line-two"><i /></div><div class="circuit-line line-three"><i /></div>
       <div class="brand-content"><h1>让教学任务、学习过程<br />与评价反馈保持有序</h1><p>知序云连接课程管理、实验任务、报告批改与教学分析，为教师和学生提供清晰一致的实验教学空间。</p></div>
       <div class="book-mark" aria-hidden="true"><div class="cloud" /><div class="book-left" /><div class="book-right" /></div>
@@ -68,7 +69,7 @@ async function submit() {
       <p class="entry-note"><span />泉州信息工程学院统一登录入口</p><h2>欢迎登录</h2><p class="intro">使用你的平台账号继续访问知序云。</p>
       <label>账号<div class="field-control"><UserRound :size="18" /><input v-model="account" autocomplete="username" placeholder="请输入学号、邮箱或管理员账号" /></div></label>
       <label>密码<div class="field-control"><KeyRound :size="18" /><input v-model="password" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" placeholder="请输入密码" /><button type="button" class="icon-button" :aria-label="showPassword ? '隐藏密码' : '显示密码'" @click="showPassword = !showPassword"><EyeOff v-if="showPassword" :size="18" /><Eye v-else :size="18" /></button></div></label>
-      <label>验证码<div class="captcha-row"><div class="field-control"><ShieldCheck :size="18" /><input v-model="captcha" maxlength="4" placeholder="输入四位验证码" /></div><button type="button" class="captcha-code" aria-label="刷新验证码" @click="refreshCaptcha"><b v-for="(char, index) in captchaCode" :key="`${char}-${index}`">{{ char }}</b></button><button type="button" class="refresh-button" aria-label="刷新验证码" @click="refreshCaptcha"><RefreshCw :size="19" /></button></div></label>
+      <label>验证码<div class="captcha-row"><div class="field-control"><ShieldCheck :size="18" /><input v-model="captcha" inputmode="numeric" maxlength="4" placeholder="输入四位数字" /></div><button type="button" class="captcha-code" aria-label="刷新验证码" @click="refreshCaptcha"><b v-for="(char, index) in captchaCode" :key="`${char}-${index}`">{{ char }}</b></button><button type="button" class="refresh-button" aria-label="刷新验证码" @click="refreshCaptcha"><RefreshCw :size="19" /></button></div></label>
       <p v-if="message" class="form-message" role="alert">{{ message }}</p>
       <label class="remember"><input v-model="remember" type="checkbox" />记住本次登录</label>
       <button class="login-button" type="submit" :disabled="auth.loading">{{ auth.loading ? "正在登录" : "登录" }}</button>

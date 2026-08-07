@@ -6,7 +6,7 @@ import AdminModal from "./AdminModal.vue";
 import { useAdminStore } from "./admin.store";
 import type { AdminUser, TeacherDetail } from "./admin.api";
 
-type DialogName = "students" | "teacher-create" | "teacher-detail" | "password" | "transfer" | null;
+type DialogName = "students" | "teacher-create" | "teacher-detail" | "password" | "transfer" | "archive" | "toggle" | null;
 const store = useAdminStore();
 const route = useRoute();
 const mode = computed<"STUDENT" | "TEACHER">(() => route.name === "admin-teachers" ? "TEACHER" : "STUDENT");
@@ -84,13 +84,27 @@ function openTransfer(item: AdminUser) {
   dialog.value = "transfer";
 }
 
-async function toggle(item: AdminUser) {
-  await store.toggleUser(item);
+function toggle(item: AdminUser) {
+  selected.value = item;
+  message.value = "";
+  dialog.value = "toggle";
 }
 
-async function archive(item: AdminUser) {
-  if (!confirm(`确认删除学生账号“${item.displayName}”吗？该账号会先归档 72 小时。`)) return;
-  await store.archiveStudent(item.id);
+function archive(item: AdminUser) {
+  selected.value = item;
+  message.value = "";
+  dialog.value = "archive";
+}
+
+async function confirmUserAction() {
+  if (!selected.value || (dialog.value !== "archive" && dialog.value !== "toggle")) return;
+  saving.value = true;
+  try {
+    if (dialog.value === "archive") await store.archiveStudent(selected.value.id);
+    else await store.toggleUser(selected.value);
+    dialog.value = null;
+  } catch (error) { message.value = (error as Error).message; }
+  finally { saving.value = false; }
 }
 
 async function saveTeacher() {
@@ -227,5 +241,10 @@ function downloadTemplate() { downloadCsv("学生导入模板.csv", [["学号", 
 
     <AdminModal v-if="dialog === 'password' && selected" title="重置账号密码" :subtitle="`将为 ${selected.displayName} 设置新的登录密码`" @close="dialog = null"><label class="admin-field"><span>新密码</span><input v-model="password" type="password" minlength="6" /></label><p v-if="message" class="admin-form-error">{{ message }}</p><template #footer><button class="admin-secondary-button" @click="dialog = null">取消</button><button class="admin-primary-button" :disabled="saving" @click="savePassword">确认重置密码</button></template></AdminModal>
     <AdminModal v-if="dialog === 'transfer' && selected" title="学生转班" :subtitle="`调整 ${selected.displayName} 的行政班归属`" @close="dialog = null"><label class="admin-field"><span>目标班级</span><select v-model.number="transferClassId"><option :value="null" disabled>请选择班级</option><option v-for="item in store.classes" :key="item.id" :value="item.id">{{ item.name }}</option></select></label><p v-if="message" class="admin-form-error">{{ message }}</p><template #footer><button class="admin-secondary-button" @click="dialog = null">取消</button><button class="admin-primary-button" :disabled="saving || !transferClassId" @click="saveTransfer">确认转班</button></template></AdminModal>
+    <AdminModal v-if="(dialog === 'archive' || dialog === 'toggle') && selected" :title="dialog === 'archive' ? '删除学生账号' : selected.enabled ? '停用账号' : '启用账号'" :subtitle="`${selected.displayName} · ${selected.studentNo || selected.loginName}`" @close="dialog = null">
+      <div class="admin-warning-strip"><Info :size="16" /><span v-if="dialog === 'archive'">账号将先归档 72 小时，期间可由管理员恢复；关联数据不会立即物理删除。</span><span v-else>{{ selected.enabled ? '停用后该用户将无法登录，但历史课程和提交记录会保留。' : '启用后该用户将恢复登录和业务操作权限。' }}</span></div>
+      <p v-if="message" class="admin-form-error">{{ message }}</p>
+      <template #footer><button class="admin-secondary-button" @click="dialog = null">取消</button><button class="admin-primary-button" :disabled="saving" @click="confirmUserAction">{{ saving ? '处理中' : dialog === 'archive' ? '确认删除账号' : selected.enabled ? '确认停用' : '确认启用' }}</button></template>
+    </AdminModal>
   </section>
 </template>

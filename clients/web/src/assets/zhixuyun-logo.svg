@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">知序云 Logo</title>
+  <desc id="desc">由书页、有序节点和云形轮廓组成的深绿色方形应用标志</desc>
+  <rect width="1024" height="1024" rx="188" fill="#123D34"/>
+  <rect x="34" y="34" width="956" height="956" rx="158" fill="none" stroke="#2B5C51" stroke-width="12"/>
+  <path d="M342 388C311 388 286 363 286 332C286 302 309 278 338 276C354 226 399 192 451 192C489 192 522 209 544 236C561 224 582 217 604 217C649 217 687 251 692 296C724 302 748 330 748 363C748 372 746 380 743 388H342Z" fill="#78D6BF"/>
+  <path d="M228 430C334 398 423 420 488 474V754C418 704 330 686 228 711V430Z" fill="#F4FAF7"/>
+  <path d="M796 430C690 398 601 420 536 474V754C606 704 694 686 796 711V430Z" fill="#F4FAF7"/>
+  <path d="M512 454V752" stroke="#78D6BF" stroke-width="34" stroke-linecap="round"/>
+  <circle cx="512" cy="492" r="27" fill="#123D34" stroke="#78D6BF" stroke-width="18"/>
+  <circle cx="512" cy="592" r="27" fill="#123D34" stroke="#78D6BF" stroke-width="18"/>
+  <circle cx="512" cy="692" r="27" fill="#123D34" stroke="#78D6BF" stroke-width="18"/>
+  <path d="M285 506H417M285 586H397M285 666H365M607 506H739M627 586H739M659 666H739" stroke="#28584D" stroke-width="30" stroke-linecap="round"/>
+  <path d="M250 741C348 714 435 730 512 786C589 730 676 714 774 741" fill="none" stroke="#78D6BF" stroke-width="34" stroke-linecap="round"/>
+</svg>

@@ -19,6 +19,7 @@ export type CourseTeacher = { teacherId: number; teacherName: string; roleCode: 
 export type AdminClass = {
   id: number;
   courseId: number;
+  administrativeClassId?: number | null;
   name: string;
   term: string;
   enabled: boolean;
@@ -101,4 +102,6 @@ export const adminApi = {
   deleteAdministrativeClass: (id: number) => apiRequest<void>(`/admin/administrative-classes/${id}`, { method: "DELETE" }),
   settings: () => apiRequest<Record<string, string | number>>("/admin/settings"),
   saveSettings: (body: Record<string, unknown>) => apiRequest<Record<string, string | number>>("/admin/settings", { method: "PUT", ...jsonBody(body) }),
+  publishAnnouncement: (body: { scope: string; level: string; title: string; content: string }) =>
+    apiRequest<{ recipientCount: number }>("/admin/announcements", { method: "POST", ...jsonBody(body) }),
 };

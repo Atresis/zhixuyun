@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { KeyRound, ShieldCheck } from "@lucide/vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "./auth.store";
@@ -11,6 +11,7 @@ const newPassword = ref("");
 const confirmation = ref("");
 const message = ref("");
 const busy = ref(false);
+const required = computed(() => Boolean(auth.user?.mustChangePassword));
 
 async function submit() {
   message.value = "";
@@ -33,7 +34,7 @@ async function submit() {
       <small class="school-mark">泉州信息工程学院</small>
     </section>
     <section class="signin-panel"><form class="signin-form" @submit.prevent="submit">
-      <p class="entry-note"><span />首次登录安全检查</p><h2>修改初始密码</h2><p class="intro">新密码至少 6 个字符，且不要与初始密码相同。</p>
+      <p class="entry-note"><span />{{ required ? "首次登录安全检查" : "账号安全" }}</p><h2>{{ required ? "修改初始密码" : "修改登录密码" }}</h2><p class="intro">新密码至少需要 6 个字符，并请避免与旧密码相同。</p>
       <label>当前密码<div class="field-control"><KeyRound :size="18" /><input v-model="oldPassword" type="password" autocomplete="current-password" /></div></label>
       <label>新密码<div class="field-control"><KeyRound :size="18" /><input v-model="newPassword" type="password" autocomplete="new-password" /></div></label>
       <label>确认新密码<div class="field-control"><KeyRound :size="18" /><input v-model="confirmation" type="password" autocomplete="new-password" /></div></label>

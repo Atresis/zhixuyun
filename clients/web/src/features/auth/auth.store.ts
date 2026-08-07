@@ -2,7 +2,7 @@ import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { authApi } from "../../api/auth";
 import { setUnauthorizedHandler } from "../../api/client";
-import type { AuthUser } from "./auth.types";
+import type { AuthUser, UserProfile } from "./auth.types";
 import { clearStoredUser, clearToken, homeForRole, normalizeAuthError, readStoredUser, readToken, saveStoredUser, saveToken } from "./auth.utils";
 
 export const useAuthStore = defineStore("auth", () => {
@@ -79,7 +79,13 @@ export const useAuthStore = defineStore("auth", () => {
     return user.value ? homeForRole(user.value.role) : "/login";
   }
 
+  function applyProfile(profile: UserProfile): void {
+    if (!user.value) return;
+    user.value = { ...user.value, displayName: profile.displayName };
+    saveStoredUser(user.value, Boolean(localStorage.getItem("zhixuyun_access_token")));
+  }
+
   setUnauthorizedHandler(clearSession);
 
-  return { user, initialized, loading, error, isAuthenticated, login, restore, logout, changePassword, clearSession, destination };
+  return { user, initialized, loading, error, isAuthenticated, login, restore, logout, changePassword, clearSession, destination, applyProfile };
 });
