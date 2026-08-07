@@ -89,9 +89,28 @@ class LearningWorkflowControllerTest {
                 .andExpect(jsonPath("$.courses[0].name").value("跨班实验课程"));
 
         submit("第一版报告");
-        submit("第二版报告");
+        mvc.perform(post("/api/v1/student/tasks/{id}/text-submission", taskId)
+                        .header("Authorization", bearer(studentToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of("content", "未退回的重复提交"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SUBMISSION_ALREADY_EXISTS"));
         long submissionId = jdbc.queryForObject("select max(id) from task_submission where task_id=?", Long.class, taskId);
 
+        mvc.perform(get("/api/v1/submissions/{id}/versions", submissionId).header("Authorization", bearer(studentToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].versionNo").value(1));
+
+        jdbc.update("update learning_task set deadline=? where id=?", Timestamp.from(Instant.now().minusSeconds(60)), taskId);
+
+        mvc.perform(post("/api/v1/teacher/submissions/{id}/return", submissionId)
+                        .header("Authorization", bearer(teacherToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"请补充数据证据\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reviewStatus").value("RETURNED"));
+
+        submit("第二版补充数据证据");
         mvc.perform(get("/api/v1/submissions/{id}/versions", submissionId).header("Authorization", bearer(studentToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].versionNo").value(2))
@@ -100,7 +119,7 @@ class LearningWorkflowControllerTest {
         mvc.perform(post("/api/v1/teacher/submissions/{id}/return", submissionId)
                         .header("Authorization", bearer(teacherToken))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reason\":\"请补充数据证据\"}"))
+                        .content("{\"reason\":\"请再次完善结论\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reviewStatus").value("RETURNED"));
 

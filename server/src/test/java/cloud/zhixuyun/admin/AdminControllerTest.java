@@ -84,6 +84,55 @@ class AdminControllerTest {
     }
 
     @Test
+    void businessJdbcTemplateUsesPrimaryDataSource() throws Exception {
+        String url = jdbc.getDataSource().getConnection().getMetaData().getURL();
+        Assertions.assertTrue(url.contains("admin-controller"));
+        Assertions.assertFalse(url.contains("admin-controller-backup"));
+    }
+
+    @Test
+    void courseArrangementIsVisibleToAssignedTeacherAndAdministrativeClassStudent() throws Exception {
+        UserAccount assignedTeacher = users.save(new UserAccount(null, "assigned-teacher", auth.encodePassword("secret123"), "安排教师", Role.TEACHER, true));
+        jdbc.update("insert into teacher_profile(user_id,department,title,email,phone,bio) values (?,?,?,?,?,?)",
+                assignedTeacher.getId(), "软件工程系", "讲师", "assigned@test.com", "", "");
+        long administrativeClassId = insertAdministrativeClass("2026级软件工程联动班", "2026");
+        long studentId = createStudent("arranged-student", "20260008", administrativeClassId, "2026");
+        long courseId = createCourse("课程安排联动测试", "LINK001");
+
+        String createdClass = mvc.perform(post("/api/v1/admin/courses/{courseId}/classes", courseId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"administrativeClassId":%d,"name":"2026级软件工程联动班","term":"2026-2027-1","enabled":true}
+                                """.formatted(administrativeClassId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.administrativeClassId").value(administrativeClassId))
+                .andReturn().getResponse().getContentAsString();
+        long teachingClassId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(createdClass).get("id").asLong();
+
+        mvc.perform(put("/api/v1/admin/classes/{classId}/teacher", teachingClassId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"teacherId\":" + assignedTeacher.getId() + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.teacherId").value(assignedTeacher.getId()));
+
+        String teacherToken = login("assigned-teacher");
+        mvc.perform(get("/api/v1/teacher/workspace").header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.courses[0].id").value(courseId));
+
+        String studentToken = login("arranged-student");
+        mvc.perform(get("/api/v1/student/workspace").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.courses[0].id").value(courseId))
+                .andExpect(jsonPath("$.courses[0].teacherName").value("安排教师"));
+
+        Assertions.assertEquals(studentId, jdbc.queryForObject(
+                "select user_id from student_profile where administrative_class_id=?", Long.class, administrativeClassId));
+    }
+
+    @Test
     void adminCanSearchAuditLogs() throws Exception {
         jdbc.update("insert into audit_log(actor_id,action,target_type,target_id,detail,created_at) values (?,?,?,?,?,current_timestamp)",
                 teacherId, "UPDATE_COURSE", "COURSE", "42", "日志检索唯一标记");
@@ -294,6 +343,13 @@ class AdminControllerTest {
         jdbc.update("insert into student_profile(user_id,student_no,grade_year,administrative_class_id) values (?,?,?,?)",
                 student.getId(), studentNo, gradeYear, administrativeClassId);
         return student.getId();
+    }
+
+    private String login(String account) throws Exception {
+        String response = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"account\":\"" + account + "\",\"password\":\"secret123\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return new com.fasterxml.jackson.databind.ObjectMapper().readTree(response).get("token").asText();
     }
 
     private long insertAdministrativeClass(String name, String gradeYear) {

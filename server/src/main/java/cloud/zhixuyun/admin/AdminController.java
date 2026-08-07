@@ -200,4 +200,10 @@ public class AdminController {
     public Map<String, Object> saveSettings(@RequestHeader("Authorization") String authorization, @RequestBody Map<String, Object> body) {
         return service.saveSettings(service.requireAdmin(authorization), body);
     }
+
+    @PostMapping("/announcements")
+    public Map<String, Object> publishAnnouncement(@RequestHeader("Authorization") String authorization,
+                                                    @RequestBody Map<String, Object> body) {
+        return service.publishAnnouncement(service.requireAdmin(authorization), body);
+    }
 }

@@ -428,7 +428,34 @@ paths:
           description: 提交后返回最新学生工作台
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/StudentWorkspace' }
+                schema: { $ref: '#/components/schemas/StudentWorkspace' }
+  /student/tasks/{taskId}/answer-submission:
+    post:
+      operationId: submitStudentAnswers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: taskId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: 结构化作业答案已提交并返回最新学生工作台 }
+        '400': { description: 题目未完成或答题格式错误 }
+  /student/resources/{resourceId}/download:
+    get:
+      operationId: downloadStudentCourseResource
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: resourceId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: 下载当前学生所属课程的资料 }
+        '404': { description: 资料不存在或不属于当前学生课程 }
   /student/assistant/ask:
     post:
       operationId: askStudentAssistant
@@ -452,6 +479,77 @@ paths:
                 properties:
                   answer: { type: string }
         '503': { description: 未配置模型 API Key }
+  /student/assistant/sessions:
+    post:
+      operationId: createStudentAssistantSession
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 已创建当前学生私有 AI 对话 }
+  /student/assistant/sessions/{sessionId}/messages:
+    post:
+      operationId: sendStudentAssistantMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: sessionId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties: { content: { type: string, minLength: 1 } }
+      responses:
+        '200': { description: 已保存当前学生消息与 AI 回复 }
+        '404': { description: 对话不存在或不属于当前学生 }
+  /student/teacher-contacts:
+    get:
+      operationId: listStudentTeacherContacts
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { description: 当前学生课程的任课教师列表 }
+  /student/conversations:
+    post:
+      operationId: createStudentConversation
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teacherId, content]
+              properties:
+                teacherId: { type: integer, format: int64 }
+                content: { type: string, minLength: 1 }
+      responses:
+        '200': { description: 已创建或继续与任课教师的会话 }
+        '404': { description: 教师不属于当前学生课程 }
+  /student/conversations/{conversationId}/messages:
+    post:
+      operationId: sendStudentConversationMessage
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: conversationId, in: path, required: true, schema: { type: integer, format: int64 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties: { content: { type: string, minLength: 1 } }
+      responses:
+        '200': { description: 学生消息已发送 }
+        '404': { description: 会话不存在或不属于当前学生 }
+  /student/conversations/{conversationId}/read:
+    post:
+      operationId: readStudentConversation
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: conversationId, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        '200': { description: 当前学生会话已读 }
   /admin/dashboard:
     get:
       operationId: getAdminDashboard
@@ -560,6 +658,24 @@ paths:
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
       responses:
         '200': { description: 保存平台设置 }
+  /admin/announcements:
+    post:
+      operationId: publishAdminAnnouncement
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scope, level, title, content]
+              properties:
+                scope: { type: string, enum: [全部用户, 仅教师, 仅学生] }
+                level: { type: string }
+                title: { type: string, maxLength: 220 }
+                content: { type: string, maxLength: 1000 }
+      responses:
+        '200': { description: 消息已投递给目标用户 }
   /student/courses/join:
     post:
       operationId: joinStudentCourse
@@ -737,7 +853,7 @@ components:
         recommendations: { type: array, items: { type: string } }
     StudentWorkspace:
       type: object
-      required: [profile, metrics, courses, tasks, reports, notifications, assistantPrompts]
+      required: [profile, metrics, courses, tasks, reports, notifications, assistantPrompts, assistantSessions, conversations, teacherContacts]
       properties:
         profile: { type: object, additionalProperties: true }
         metrics: { type: object, additionalProperties: true }
@@ -746,6 +862,9 @@ components:
         reports: { type: array, items: { type: object, additionalProperties: true } }
         notifications: { type: array, items: { type: object, additionalProperties: true } }
         assistantPrompts: { type: array, items: { type: string } }
+        assistantSessions: { type: array, items: { type: object, additionalProperties: true } }
+        conversations: { type: array, items: { type: object, additionalProperties: true } }
+        teacherContacts: { type: array, items: { type: object, additionalProperties: true } }
     TeacherTaskInput:
       type: object
       properties:

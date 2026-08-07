@@ -16,6 +16,7 @@ spring:
       max-file-size: 20MB
       max-request-size: 24MB
 zhixuyun:
+  demo-data: ${ZHIXUYUN_DEMO_DATA:false}
   ai:
     api-key: ${ZHIXUYUN_AI_API_KEY:}
     base-url: ${ZHIXUYUN_AI_BASE_URL:https://api.moonshot.cn/v1}

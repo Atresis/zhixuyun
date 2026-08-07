@@ -6,6 +6,7 @@ import cloud.zhixuyun.auth.AuthSessionService;
 import cloud.zhixuyun.auth.Role;
 import cloud.zhixuyun.auth.UserAccount;
 import cloud.zhixuyun.auth.UserRepository;
+import cloud.zhixuyun.workflow.LearningWorkflowService;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -36,9 +37,11 @@ public class AdminService {
     private final BackupArchiveRepository backups;
     private final StudentNumberService studentNumbers;
     private final StudentImportParser studentImportParser;
+    private final LearningWorkflowService workflow;
 
     public AdminService(JdbcTemplate jdbc, UserRepository users, AuthService auth, AuthSessionService sessions,
-                        BackupArchiveRepository backups, StudentNumberService studentNumbers, StudentImportParser studentImportParser) {
+                        BackupArchiveRepository backups, StudentNumberService studentNumbers, StudentImportParser studentImportParser,
+                        LearningWorkflowService workflow) {
         this.jdbc = jdbc;
         this.users = users;
         this.auth = auth;
@@ -46,6 +49,7 @@ public class AdminService {
         this.backups = backups;
         this.studentNumbers = studentNumbers;
         this.studentImportParser = studentImportParser;
+        this.workflow = workflow;
     }
 
     public UserAccount requireAdmin(String authorization) {
@@ -464,7 +468,7 @@ public class AdminService {
 
     public List<Map<String, Object>> classes(long courseId) {
         return jdbc.query("""
-                select tc.id,tc.course_id,tc.name,tc.term,tc.enabled,
+                select tc.id,tc.course_id,tc.administrative_class_id,tc.name,tc.term,tc.enabled,
                        tcta.teacher_id,u.display_name teacher_name
                 from teaching_class tc
                 left join teaching_class_teacher_assignment tcta on tcta.teaching_class_id=tc.id
@@ -475,6 +479,8 @@ public class AdminService {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", rs.getLong("id"));
             item.put("courseId", rs.getLong("course_id"));
+            Object administrativeClassId = rs.getObject("administrative_class_id");
+            item.put("administrativeClassId", administrativeClassId == null ? null : ((Number) administrativeClassId).longValue());
             item.put("name", rs.getString("name"));
             item.put("term", rs.getString("term"));
             item.put("enabled", rs.getBoolean("enabled"));
@@ -491,10 +497,11 @@ public class AdminService {
             throw notFound("Course not found");
         }
         long classId = insert("""
-                insert into teaching_class(course_id,name,term,enabled)
-                values (?,?,?,?)
+                insert into teaching_class(course_id,administrative_class_id,name,term,enabled)
+                values (?,?,?,?,?)
                 """,
                 courseId,
+                longValue(body.get("administrativeClassId")),
                 required(body, "name", 120),
                 required(body, "term", 80),
                 booleanValue(body.get("enabled"), true)
@@ -511,9 +518,10 @@ public class AdminService {
         Map<String, Object> current = teachingClassSnapshot(classId);
         jdbc.update("""
                 update teaching_class
-                set name=?, term=?, enabled=?
+                set administrative_class_id=?, name=?, term=?, enabled=?
                 where id=?
                 """,
+                body.containsKey("administrativeClassId") ? longValue(body.get("administrativeClassId")) : current.get("administrativeClassId"),
                 body.containsKey("name") ? required(body, "name", 120) : current.get("name"),
                 body.containsKey("term") ? required(body, "term", 80) : current.get("term"),
                 body.containsKey("enabled") ? booleanValue(body.get("enabled"), true) : current.get("enabled"),
@@ -664,6 +672,28 @@ public class AdminService {
     }
 
     @Transactional
+    public Map<String, Object> publishAnnouncement(UserAccount actor, Map<String, Object> body) {
+        String scope = text(body, "scope", "全部用户");
+        String level = text(body, "level", "普通通知");
+        String title = text(body, "title", "").trim();
+        String content = text(body, "content", "").trim();
+        if (title.isBlank() || content.isBlank()) throw badRequest("通知标题和内容不能为空");
+        if (title.length() > 220 || content.length() > 1000) throw badRequest("通知内容超出长度限制");
+        String role = switch (scope) {
+            case "仅教师" -> "TEACHER";
+            case "仅学生" -> "STUDENT";
+            case "全部用户" -> null;
+            default -> throw badRequest("接收范围无效");
+        };
+        List<Long> recipients = role == null
+                ? jdbc.query("select id from user_account where enabled=true and role in ('STUDENT','TEACHER')", (rs, row) -> rs.getLong(1))
+                : jdbc.query("select id from user_account where enabled=true and role=?", (rs, row) -> rs.getLong(1), role);
+        recipients.forEach(id -> workflow.notifyUser(id, "SYSTEM", title, "[" + level + "] " + content, "ANNOUNCEMENT", null));
+        audit(actor, "PUBLISH_ANNOUNCEMENT", "ANNOUNCEMENT", null, scope + ": " + title);
+        return Map.of("recipientCount", recipients.size(), "title", title, "level", level);
+    }
+
+    @Transactional
     public Map<String, Object> importStudents(UserAccount actor, MultipartFile file) {
         List<Map<String, String>> rows;
         try {
@@ -767,7 +797,7 @@ public class AdminService {
 
     private Map<String, Object> teachingClassSnapshot(long classId) {
         return jdbc.query("""
-                select tc.id,tc.course_id,tc.name,tc.term,tc.enabled,
+                select tc.id,tc.course_id,tc.administrative_class_id,tc.name,tc.term,tc.enabled,
                        tcta.teacher_id,u.display_name teacher_name
                 from teaching_class tc
                 left join teaching_class_teacher_assignment tcta on tcta.teaching_class_id=tc.id
@@ -780,6 +810,8 @@ public class AdminService {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", rs.getLong("id"));
             item.put("courseId", rs.getLong("course_id"));
+            Object administrativeClassId = rs.getObject("administrative_class_id");
+            item.put("administrativeClassId", administrativeClassId == null ? null : ((Number) administrativeClassId).longValue());
             item.put("name", rs.getString("name"));
             item.put("term", rs.getString("term"));
             item.put("enabled", rs.getBoolean("enabled"));

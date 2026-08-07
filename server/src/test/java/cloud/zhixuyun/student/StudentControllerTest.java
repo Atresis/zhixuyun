@@ -43,12 +43,16 @@ class StudentControllerTest {
     @MockBean AiGradingService grading;
     private String token;
     private long taskId;
+    private long teacherId;
+    private long courseId;
+    private long resourceId;
 
     @BeforeEach
     void setUp() throws Exception {
         when(grading.grade(any())).thenReturn(new AiGradingService.GradeResult(73, "结构清楚，但结果分析需要补充数据证据。"));
         users.clear();
         UserAccount teacher = users.save(new UserAccount(null, "teacher", auth.encodePassword("secret123"), "测试教师", Role.TEACHER, true));
+        teacherId = teacher.getId();
         UserAccount student = users.save(new UserAccount(null, "student", auth.encodePassword("secret123"), "测试学生", Role.STUDENT, true));
         jdbc.update("insert into administrative_class(name,grade_year,major_name,enabled) values (?,?,?,true)", "2023级软件工程3班", "2023", "软件工程");
         long classId = jdbc.queryForObject("select max(id) from administrative_class", Long.class);
@@ -56,7 +60,11 @@ class StudentControllerTest {
                 student.getId(), "20230001", "2023", classId);
         jdbc.update("insert into course(teacher_id,name,code,class_name,semester,schedule_text,student_count,color) values (?,?,?,?,?,?,?,?)",
                 teacher.getId(), "Java Web 应用开发", "SE-JW-2303", "2023级软件工程3班", "2025-2026学年第二学期", "周二 3-4节", 46, "#087f68");
-        long courseId = jdbc.queryForObject("select max(id) from course", Long.class);
+        courseId = jdbc.queryForObject("select max(id) from course", Long.class);
+        jdbc.update("insert into course_resource(course_id,owner_id,kind,name,source_label,shared,content_type,file_size,content,created_at) values (?,?,?,?,?,?,?,?,?,?)",
+                courseId, teacherId, "MATERIAL", "实验指导.pdf", "任课教师", false, "application/pdf", 4L,
+                new byte[]{1, 2, 3, 4}, Timestamp.from(Instant.now()));
+        resourceId = jdbc.queryForObject("select max(id) from course_resource", Long.class);
         jdbc.update("insert into learning_task(course_id,task_type,name,description,start_at,deadline,max_score,questions_json,created_at) values (?,?,?,?,?,?,?,?,?)",
                 courseId, "EXPERIMENT", "实验 6：Spring Boot 数据持久化", "提交实验报告", Timestamp.from(Instant.now().minusSeconds(3600)),
                 Timestamp.from(Instant.now().plusSeconds(86400)), 100, "[]", Timestamp.from(Instant.now().minusSeconds(7200)));
@@ -77,11 +85,52 @@ class StudentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profile.studentNo").value("20230001"))
                 .andExpect(jsonPath("$.tasks[0].name").value("实验 6：Spring Boot 数据持久化"))
+                .andExpect(jsonPath("$.tasks[0].submissionStatus").value("AI 初评完成"))
+                .andExpect(jsonPath("$.courses[0].resources[0].name").value("实验指导.pdf"))
+                .andExpect(jsonPath("$.teacherContacts[0].name").value("测试教师"));
+    }
+
+    @Test
+    void studentCanSubmitStructuredAnswers() throws Exception {
+        jdbc.update("update task_submission set review_status='RETURNED' where task_id=?", taskId);
+        jdbc.update("update learning_task set task_type='HOMEWORK',questions_json=? where id=?",
+                "[{\"id\":1,\"type\":\"SINGLE\",\"title\":\"Spring Bean 默认作用域\",\"options\":[\"singleton\",\"prototype\"],\"score\":10}]", taskId);
+
+        mvc.perform(post("/api/v1/student/tasks/{taskId}/answer-submission", taskId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"answers\":{\"1\":\"singleton\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tasks[0].answers.1").value("singleton"))
                 .andExpect(jsonPath("$.tasks[0].submissionStatus").value("AI 初评完成"));
     }
 
     @Test
+    void studentCanDownloadOwnedCourseResource() throws Exception {
+        mvc.perform(get("/api/v1/student/resources/{resourceId}/download", resourceId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertEquals(4, result.getResponse().getContentAsByteArray().length));
+    }
+
+    @Test
+    void studentCanStartAndContinueTeacherConversation() throws Exception {
+        mvc.perform(post("/api/v1/student/conversations")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"teacherId\":" + teacherId + ",\"content\":\"老师您好，我想确认实验要求。\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contactName").value("测试教师"))
+                .andExpect(jsonPath("$.messages[0].sender").value("STUDENT"));
+
+        mvc.perform(get("/api/v1/student/workspace").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversations[0].messages[0].content").value("老师您好，我想确认实验要求。"));
+    }
+
+    @Test
     void studentCanSubmitTextAndAskAssistant() throws Exception {
+        jdbc.update("update task_submission set review_status='RETURNED' where task_id=?", taskId);
         mvc.perform(post("/api/v1/student/tasks/{taskId}/text-submission", taskId)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -101,6 +150,7 @@ class StudentControllerTest {
 
     @Test
     void studentCanSubmitFile() throws Exception {
+        jdbc.update("update task_submission set review_status='RETURNED' where task_id=?", taskId);
         MockMultipartFile file = new MockMultipartFile("file", "report.txt",
                 MediaType.TEXT_PLAIN_VALUE, "实验结果表明连接池配置生效".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         mvc.perform(multipart("/api/v1/student/tasks/{taskId}/file-submission", taskId)
@@ -114,6 +164,7 @@ class StudentControllerTest {
 
     @Test
     void aiFailureDoesNotOverwriteExistingSubmission() throws Exception {
+        jdbc.update("update task_submission set review_status='RETURNED' where task_id=?", taskId);
         when(grading.grade(any())).thenThrow(new AuthException(
                 HttpStatus.BAD_GATEWAY, "AI_PROVIDER_ERROR", "模型服务请求失败"));
 

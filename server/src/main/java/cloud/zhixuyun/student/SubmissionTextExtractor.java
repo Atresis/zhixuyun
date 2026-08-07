@@ -4,6 +4,8 @@ import cloud.zhixuyun.auth.AuthException;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -31,6 +33,8 @@ public class SubmissionTextExtractor {
                 text = new String(file.getBytes(), StandardCharsets.UTF_8);
             } else if (lower.endsWith(".docx")) {
                 text = extractDocx(file);
+            } else if (lower.endsWith(".pdf")) {
+                text = extractPdf(file);
             } else {
                 throw invalidFile("目前仅支持 .txt、.md 和 .docx 格式的报告");
             }
@@ -59,6 +63,12 @@ public class SubmissionTextExtractor {
             String tables = document.getTables().stream().map(XWPFTable::getText)
                     .filter(value -> !value.isBlank()).collect(Collectors.joining("\n"));
             return paragraphs + (paragraphs.isBlank() || tables.isBlank() ? "" : "\n") + tables;
+        }
+    }
+
+    private String extractPdf(MultipartFile file) throws IOException {
+        try (var document = Loader.loadPDF(file.getBytes())) {
+            return new PDFTextStripper().getText(document);
         }
     }
 

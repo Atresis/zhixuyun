@@ -30,6 +30,13 @@ import java.util.Map;
 
 @Service
 public class TeacherService {
+    private static final String COURSE_ACCESS_SQL = """
+            (c.teacher_id=? or exists (
+                select 1 from course_teacher_assignment cta
+                where cta.course_id=c.id and cta.teacher_id=?
+            ))
+            """;
+
     private final JdbcTemplate jdbc;
     private final AuthSessionService sessions;
     private final ObjectMapper json;
@@ -120,22 +127,23 @@ public class TeacherService {
     }
 
     public Download downloadResource(UserAccount teacher, long resourceId) {
-        return jdbc.query("select r.name,r.content_type,r.storage_key,r.content from course_resource r join course c on c.id=r.course_id where r.id=? and c.teacher_id=?",
+        return jdbc.query("select r.name,r.content_type,r.storage_key,r.content from course_resource r join course c on c.id=r.course_id where r.id=? and " + COURSE_ACCESS_SQL,
                 rs -> {
                     if (!rs.next()) throw notFound("资料不存在或无权访问");
                     String storageKey = rs.getString("storage_key");
                     byte[] content = (storageKey == null || storageKey.isBlank()) ? rs.getBytes("content") : readStoredResource(storageKey);
                     return new Download(rs.getString("name"), rs.getString("content_type"), content);
-                }, resourceId, teacher.getId());
+                }, resourceId, teacher.getId(), teacher.getId());
     }
 
     @Transactional
     public void deleteResource(UserAccount teacher, long resourceId) {
-        String storageKey = jdbc.query("select storage_key from course_resource where id=? and owner_id=? and course_id in (select id from course where teacher_id=?)",
+        String storageKey = jdbc.query("select r.storage_key from course_resource r join course c on c.id=r.course_id "
+                        + "where r.id=? and r.owner_id=? and " + COURSE_ACCESS_SQL,
                 rs -> {
                     if (!rs.next()) throw notFound("璧勬枃涓嶅瓨鍦ㄣ€佸苟闈炴湰浜轰笂浼犳垨鏃犳潈鍒犻櫎");
                     return rs.getString("storage_key");
-                }, resourceId, teacher.getId(), teacher.getId());
+                }, resourceId, teacher.getId(), teacher.getId(), teacher.getId());
         deleteStoredResource(storageKey);
         int changed = jdbc.update("delete from course_resource where id=?", resourceId);
         if (changed == 0) throw notFound("资料不存在、并非本人上传或无权删除");
@@ -178,11 +186,11 @@ public class TeacherService {
 
     @Transactional
     public Map<String, Object> gradeSubmission(UserAccount teacher, long submissionId, Map<String, Object> body) {
-        Map<String, Object> current = jdbc.query("select s.task_id,t.max_score from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where s.id=? and c.teacher_id=?",
+        Map<String, Object> current = jdbc.query("select s.task_id,t.max_score from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where s.id=? and " + COURSE_ACCESS_SQL,
                 rs -> {
                     if (!rs.next()) throw notFound("提交不存在或无权批改");
                     return Map.of("taskId", rs.getLong("task_id"), "maxScore", rs.getInt("max_score"));
-                }, submissionId, teacher.getId());
+                }, submissionId, teacher.getId(), teacher.getId());
         int score = integer(body.get("teacherScore"), -1);
         int max = (int) current.get("maxScore");
         if (score < 0 || score > max) throw badRequest("评分必须在 0 到满分之间");
@@ -244,15 +252,15 @@ public class TeacherService {
         Integer total = jdbc.queryForObject("select count(distinct sp.user_id) from student_profile sp join user_account u on u.id=sp.user_id "
                 + "left join administrative_class ac on ac.id=sp.administrative_class_id "
                 + "left join course_enrollment ce on ce.student_id=sp.user_id and ce.course_id=? and ce.active=true "
-                + "where (ac.name=(select class_name from course where id=? and teacher_id=?) or ce.id is not null) "
+                + "where (ac.name=(select class_name from course where id=?) or ce.id is not null) "
                 + "and (u.display_name like ? or sp.student_no like ?)", Integer.class,
-                courseId, courseId, teacher.getId(), pattern, pattern);
+                courseId, courseId, pattern, pattern);
         int offset = (safePage - 1) * safeSize;
         List<Map<String, Object>> items = jdbc.query("select distinct u.id,u.display_name,sp.student_no,coalesce(ac.name,c.class_name) class_name "
                         + "from student_profile sp join user_account u on u.id=sp.user_id "
                         + "left join administrative_class ac on ac.id=sp.administrative_class_id "
                         + "left join course_enrollment ce on ce.student_id=sp.user_id and ce.course_id=? and ce.active=true "
-                        + "join course c on c.id=? and c.teacher_id=? "
+                        + "join course c on c.id=? "
                         + "where (ac.name=c.class_name or ce.id is not null) "
                         + "and (u.display_name like ? or sp.student_no like ?) "
                         + "order by sp.student_no limit ? offset ?",
@@ -261,7 +269,7 @@ public class TeacherService {
                     item.put("id", rs.getLong("id")); item.put("name", rs.getString("display_name"));
                     item.put("studentNo", rs.getString("student_no")); item.put("className", rs.getString("class_name"));
                     return item;
-                }, courseId, courseId, teacher.getId(), pattern, pattern, safeSize, offset);
+                }, courseId, courseId, pattern, pattern, safeSize, offset);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("items", items); result.put("page", safePage); result.put("size", safeSize);
         result.put("total", total == null ? 0 : total); result.put("pages", total == null || total == 0 ? 0 : (total + safeSize - 1) / safeSize);
@@ -273,19 +281,19 @@ public class TeacherService {
         if (content == null || content.isBlank()) throw badRequest("首条消息不能为空");
         Map<String, Object> student = jdbc.query("select u.id,u.display_name,sp.student_no from student_profile sp "
                         + "join user_account u on u.id=sp.user_id left join administrative_class ac on ac.id=sp.administrative_class_id "
-                        + "where u.id=? and (exists (select 1 from course c where c.teacher_id=? and c.class_name=ac.name) "
+                        + "where u.id=? and (exists (select 1 from course c where " + COURSE_ACCESS_SQL + " and c.class_name=ac.name) "
                         + "or exists (select 1 from course c join course_enrollment ce on ce.course_id=c.id "
-                        + "where c.teacher_id=? and ce.student_id=sp.user_id and ce.active=true))",
+                        + "where " + COURSE_ACCESS_SQL + " and ce.student_id=sp.user_id and ce.active=true))",
                 rs -> {
                     if (!rs.next()) throw notFound("学生不在当前任课班级中");
                     return Map.of("id", rs.getLong("id"), "name", rs.getString("display_name"), "studentNo", rs.getString("student_no"));
-                }, studentId, teacher.getId(), teacher.getId());
+                }, studentId, teacher.getId(), teacher.getId(), teacher.getId(), teacher.getId());
         Integer existing = jdbc.queryForObject("select count(*) from conversation where teacher_id=? and student_id=?", Integer.class,
                 teacher.getId(), studentId);
         if (existing != null && existing > 0) throw badRequest("该学生已经存在会话");
         Instant now = Instant.now();
-        long conversationId = insert("insert into conversation(teacher_id,student_id,contact_name,contact_type,avatar_text,unread_count,updated_at) values (?,?,?,?,?,?,?)",
-                teacher.getId(), studentId, student.get("name"), "STUDENT", String.valueOf(student.get("name")).substring(0, 1), 0, Timestamp.from(now));
+        long conversationId = insert("insert into conversation(teacher_id,student_id,contact_name,contact_type,avatar_text,unread_count,student_unread_count,updated_at) values (?,?,?,?,?,?,?,?)",
+                teacher.getId(), studentId, student.get("name"), "STUDENT", String.valueOf(student.get("name")).substring(0, 1), 0, 1, Timestamp.from(now));
         jdbc.update("insert into conversation_message(conversation_id,sender,title,content,created_at) values (?,?,?,?,?)",
                 conversationId, "TEACHER", null, content.trim(), Timestamp.from(now));
         return conversation(conversationId, teacher.getId());
@@ -298,7 +306,7 @@ public class TeacherService {
         if (content == null || content.isBlank()) throw badRequest("消息不能为空");
         jdbc.update("insert into conversation_message(conversation_id,sender,title,content,created_at) values (?,?,?,?,?)",
                 conversationId, "TEACHER", null, content.trim(), Timestamp.from(Instant.now()));
-        jdbc.update("update conversation set unread_count=0,updated_at=? where id=?", Timestamp.from(Instant.now()), conversationId);
+        jdbc.update("update conversation set unread_count=0,student_unread_count=student_unread_count+1,updated_at=? where id=?", Timestamp.from(Instant.now()), conversationId);
         return conversation(conversationId, teacher.getId());
     }
 
@@ -310,7 +318,8 @@ public class TeacherService {
     }
 
     private List<Map<String, Object>> courses(long teacherId) {
-        return jdbc.query("select id,name,code,class_name,semester,schedule_text,student_count,color from course where teacher_id=? order by id",
+        return jdbc.query("select c.id,c.name,c.code,c.class_name,c.semester,c.schedule_text,c.student_count,c.color "
+                        + "from course c where " + COURSE_ACCESS_SQL + " order by c.id",
                 (rs, row) -> {
                     Map<String, Object> value = new LinkedHashMap<>();
                     long id = rs.getLong("id");
@@ -325,14 +334,15 @@ public class TeacherService {
                     value.put("resources", resources(id, teacherId));
                     value.put("tasks", tasks(id, teacherId));
                     return value;
-                }, teacherId);
+                }, teacherId, teacherId);
     }
 
     private List<Map<String, Object>> resources(long courseId, long teacherId) {
-        return jdbc.query("select r.id,r.kind,r.name,r.source_label,r.shared,r.content_type,r.owner_id,r.created_at from course_resource r join course c on c.id=r.course_id where r.course_id=? and c.teacher_id=? and (r.owner_id is null or r.owner_id=? or r.shared=true) order by case when r.kind='QUESTION_BANK' then 0 else 1 end,r.created_at desc",
+        return jdbc.query("select r.id,r.kind,r.name,r.source_label,r.shared,r.content_type,r.owner_id,r.created_at from course_resource r join course c on c.id=r.course_id where r.course_id=? and "
+                        + COURSE_ACCESS_SQL + " and (r.owner_id is null or r.owner_id=? or r.shared=true) order by case when r.kind='QUESTION_BANK' then 0 else 1 end,r.created_at desc",
                 (rs, row) -> resourceMap(rs.getLong("id"), rs.getString("kind"), rs.getString("name"), rs.getString("source_label"),
                         rs.getBoolean("shared"), rs.getString("content_type"), (Long) rs.getObject("owner_id"), rs.getTimestamp("created_at").toInstant(), teacherId),
-                courseId, teacherId, teacherId);
+                courseId, teacherId, teacherId, teacherId);
     }
 
     private Map<String, Object> resource(long id, long teacherId) {
@@ -373,7 +383,7 @@ public class TeacherService {
     }
 
     private Map<String, Object> task(long taskId, long teacherId) {
-        return jdbc.query("select t.id,t.course_id,t.task_type,t.name,t.description,t.start_at,t.deadline,t.max_score,t.questions_json,t.created_at from learning_task t join course c on c.id=t.course_id where t.id=? and c.teacher_id=?",
+        return jdbc.query("select t.id,t.course_id,t.task_type,t.name,t.description,t.start_at,t.deadline,t.max_score,t.questions_json,t.created_at from learning_task t join course c on c.id=t.course_id where t.id=? and " + COURSE_ACCESS_SQL,
                 rs -> {
                     if (!rs.next()) throw notFound("任务不存在或无权访问");
                     Map<String, Object> value = new LinkedHashMap<>();
@@ -388,7 +398,7 @@ public class TeacherService {
                     value.put("gradedCount", submissions.stream().filter(row -> row.get("teacherScore") != null).count());
                     value.put("studentCount", submissions.size());
                     return value;
-                }, taskId, teacherId);
+                }, taskId, teacherId, teacherId);
     }
 
     private List<Map<String, Object>> submissions(long taskId) {
@@ -421,9 +431,9 @@ public class TeacherService {
     }
 
     private Map<String, Object> metrics(long teacherId, List<Map<String, Object>> courses) {
-        Integer pending = jdbc.queryForObject("select count(*) from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where c.teacher_id=? and s.submitted=true and s.teacher_score is null", Integer.class, teacherId);
-        Integer active = jdbc.queryForObject("select count(*) from learning_task t join course c on c.id=t.course_id where c.teacher_id=? and t.start_at<=current_timestamp and t.deadline>=current_timestamp", Integer.class, teacherId);
-        Double rate = jdbc.queryForObject("select coalesce(100.0*sum(case when s.submitted then 1 else 0 end)/nullif(count(*),0),0) from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where c.teacher_id=?", Double.class, teacherId);
+        Integer pending = jdbc.queryForObject("select count(*) from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where " + COURSE_ACCESS_SQL + " and s.submitted=true and s.teacher_score is null", Integer.class, teacherId, teacherId);
+        Integer active = jdbc.queryForObject("select count(*) from learning_task t join course c on c.id=t.course_id where " + COURSE_ACCESS_SQL + " and t.start_at<=current_timestamp and t.deadline>=current_timestamp", Integer.class, teacherId, teacherId);
+        Double rate = jdbc.queryForObject("select coalesce(100.0*sum(case when s.submitted then 1 else 0 end)/nullif(count(*),0),0) from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where " + COURSE_ACCESS_SQL, Double.class, teacherId, teacherId);
         return Map.of("courseCount", courses.size(), "activeTaskCount", active == null ? 0 : active,
                 "pendingReviewCount", pending == null ? 0 : pending, "weeklySubmissionRate", Math.round(rate == null ? 0 : rate));
     }
@@ -485,12 +495,14 @@ public class TeacherService {
     }
 
     private void requireCourse(long teacherId, long courseId) {
-        Integer count = jdbc.queryForObject("select count(*) from course where id=? and teacher_id=?", Integer.class, courseId, teacherId);
+        Integer count = jdbc.queryForObject("select count(*) from course c where c.id=? and " + COURSE_ACCESS_SQL,
+                Integer.class, courseId, teacherId, teacherId);
         if (count == null || count == 0) throw notFound("课程不存在或无权访问");
     }
 
     private void requireTask(long teacherId, long taskId) {
-        Integer count = jdbc.queryForObject("select count(*) from learning_task t join course c on c.id=t.course_id where t.id=? and c.teacher_id=?", Integer.class, taskId, teacherId);
+        Integer count = jdbc.queryForObject("select count(*) from learning_task t join course c on c.id=t.course_id where t.id=? and " + COURSE_ACCESS_SQL,
+                Integer.class, taskId, teacherId, teacherId);
         if (count == null || count == 0) throw notFound("任务不存在或无权访问");
     }
 
@@ -500,16 +512,16 @@ public class TeacherService {
     }
 
     private String assistantAnswerWithAi(long teacherId, long sessionId, String prompt) {
-        int courseCount = jdbc.queryForObject("select count(*) from course where teacher_id=?", Integer.class, teacherId);
-        int pending = jdbc.queryForObject("select count(*) from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where c.teacher_id=? and s.submitted=true and s.teacher_score is null", Integer.class, teacherId);
+        int courseCount = jdbc.queryForObject("select count(*) from course c where " + COURSE_ACCESS_SQL, Integer.class, teacherId, teacherId);
+        int pending = jdbc.queryForObject("select count(*) from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where " + COURSE_ACCESS_SQL + " and s.submitted=true and s.teacher_score is null", Integer.class, teacherId, teacherId);
         List<Map<String, String>> messages = jdbc.query("select role,content from assistant_message where session_id=? order by created_at asc", (rs, row) -> Map.of("role", rs.getString("role").equals("ASSISTANT") ? "assistant" : "user", "content", rs.getString("content")), sessionId);
         String system = "你是知序云的教师教学助手。只基于教师授权的课程统计回答，不要编造学生隐私、成绩或不存在的事实。可以帮助分析教学、设计练习和总结风险；涉及学生时给出群体化、可执行且尊重隐私的建议。回答使用简洁中文。当前教师有 " + courseCount + " 门课程，待复核提交 " + pending + " 份。";
         return ai.complete(system, messages);
     }
 
     private String assistantAnswerLegacy(long teacherId, String prompt) {
-        int courseCount = jdbc.queryForObject("select count(*) from course where teacher_id=?", Integer.class, teacherId);
-        int pending = jdbc.queryForObject("select count(*) from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where c.teacher_id=? and s.submitted=true and s.teacher_score is null", Integer.class, teacherId);
+        int courseCount = jdbc.queryForObject("select count(*) from course c where " + COURSE_ACCESS_SQL, Integer.class, teacherId, teacherId);
+        int pending = jdbc.queryForObject("select count(*) from task_submission s join learning_task t on t.id=s.task_id join course c on c.id=t.course_id where " + COURSE_ACCESS_SQL + " and s.submitted=true and s.teacher_score is null", Integer.class, teacherId, teacherId);
         if (prompt.contains("实验") || prompt.contains("共性")) {
             return "根据当前账号授权的课程统计，实验报告的共性问题集中在实体映射、事务边界和异常处理。建议用一组失败事务案例进行课堂复盘，再布置 3 道针对性练习。目前还有 " + pending + " 份提交待复核。";
         }

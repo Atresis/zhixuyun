@@ -44,6 +44,7 @@ class TeacherControllerTest {
     @Autowired AuthService auth;
     @Autowired JdbcTemplate jdbc;
     private String token;
+    private long teacherId;
     private long alertId;
     private long courseId;
     private long studentId;
@@ -55,6 +56,7 @@ class TeacherControllerTest {
         deleteRecursively(storageDir);
         users.clear();
         UserAccount teacher = users.save(new UserAccount(null, "teacher-test", auth.encodePassword("secret123"), "测试教师", Role.TEACHER, true));
+        teacherId = teacher.getId();
         jdbc.update("insert into teacher_profile(user_id,department,title,email,phone,bio) values (?,?,?,?,?,?)",
                 teacher.getId(), "软件工程系", "讲师", "teacher@test.local", "", "");
         jdbc.update("insert into course(teacher_id,name,code,class_name,semester,student_count,color) values (?,?,?,?,?,?,?)",
@@ -85,6 +87,26 @@ class TeacherControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.profile.displayName").value("测试教师"))
                 .andExpect(jsonPath("$.alerts[0].title").value("测试预警"));
+    }
+
+    @Test
+    void assignedInstructorCanSeeAndManageCourse() throws Exception {
+        UserAccount lead = users.save(new UserAccount(null, "lead-teacher", auth.encodePassword("secret123"), "主讲教师", Role.TEACHER, true));
+        jdbc.update("update course set teacher_id=? where id=?", lead.getId(), courseId);
+        jdbc.update("insert into course_teacher_assignment(course_id,teacher_id,role_code,subject_or_duty) values (?,?,?,?)",
+                courseId, teacherId, "INSTRUCTOR", "任课教师");
+
+        mvc.perform(get("/api/v1/teacher/workspace").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.courses[0].id").value(courseId))
+                .andExpect(jsonPath("$.courses[0].name").value("测试课程"));
+
+        mvc.perform(post("/api/v1/teacher/courses/{id}/tasks", courseId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskType\":\"HOMEWORK\",\"name\":\"协同课程作业\",\"startAt\":\"2099-01-01T00:00:00Z\",\"deadline\":\"2099-12-31T23:59:59Z\",\"maxScore\":100}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("协同课程作业"));
     }
 
     @Test
